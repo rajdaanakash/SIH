@@ -109,7 +109,8 @@ Return ONLY a valid JSON object matching this schema (no markdown, no backticks 
         }
 
         const completion = await groq.chat.completions.create({
-          model: 'llama-3.2-11b-vision-preview',
+          model: 'qwen/qwen3.8-27b',
+          max_tokens: 700,
           messages: [{ role: 'user', content: contentItems }],
           response_format: { type: 'json_object' },
           temperature: 0.1,
@@ -119,7 +120,7 @@ Return ONLY a valid JSON object matching this schema (no markdown, no backticks 
         const parsed = JSON.parse(reply);
         return NextResponse.json({
           isLiveAi: true,
-          provider: 'Groq LPU (Llama 3.2 Vision)',
+          provider: 'Groq LPU (Qwen 3.8 Vision)',
           data: parsed
         });
       } catch (groqErr: any) {
