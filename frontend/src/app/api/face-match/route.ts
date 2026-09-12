@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
+import Groq from 'groq-sdk';
 import { GoogleGenAI } from '@google/genai';
 import fs from 'fs';
 import path from 'path';
 
-function resolveGeminiApiKey(): string {
-  if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== '') {
-    return process.env.GEMINI_API_KEY.trim();
+function resolveApiKey(keyName: string): string {
+  if (process.env[keyName] && process.env[keyName]?.trim() !== '') {
+    return process.env[keyName]!.trim();
   }
   try {
     const envPath = path.join(process.cwd(), '.env.local');
     if (fs.existsSync(envPath)) {
       const content = fs.readFileSync(envPath, 'utf8');
-      const match = content.match(/GEMINI_API_KEY=(.*)/);
+      const regex = new RegExp(`${keyName}=(.*)`);
+      const match = content.match(regex);
       if (match && match[1] && match[1].trim() !== '') {
         return match[1].trim();
       }
@@ -35,20 +37,8 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const apiKey = resolveGeminiApiKey();
-
-    if (!apiKey) {
-      return NextResponse.json({
-        isLiveAi: false,
-        faceMatched: false,
-        similarityScore: 0,
-        verdict: 'NO_API_KEY',
-        reasoning: 'Gemini API key missing in .env.local. Please configure GEMINI_API_KEY.',
-        keyObservations: ['API key missing.']
-      });
-    }
-
-    const ai = new GoogleGenAI({ apiKey });
+    const groqKey = resolveApiKey('GROQ_API_KEY');
+    const geminiKey = resolveApiKey('GEMINI_API_KEY');
 
     const prompt = `You are an expert Forensic Biometric Examiner for the Ministry of Home Affairs / Sashastra Seema Bal (SSB) border control.
 Carefully examine the two images provided:
@@ -95,68 +85,110 @@ Return ONLY a valid JSON object matching this schema (no markdown, no backticks 
   "verdict": "MATCHED" | "IMPOSTER_MISMATCH" | "NO_FACE_DETECTED"
 }`;
 
-    const contents: any[] = [];
+    // 1. PRIMARY: Groq LPU Vision (Llama 3.2 Vision)
+    if (groqKey) {
+      try {
+        const groq = new Groq({ apiKey: groqKey });
+        const contentItems: any[] = [{ type: 'text', text: prompt }];
 
-    const parseBase64 = (b64: string) => {
-      if (b64.includes(',')) {
-        const parts = b64.split(',');
-        const mimeMatch = parts[0].match(/:(.*?);/);
-        return {
-          mimeType: mimeMatch ? mimeMatch[1] : 'image/jpeg',
-          data: parts[1]
-        };
-      }
-      return { mimeType: 'image/jpeg', data: b64 };
-    };
-
-    if (documentImageBase64) {
-      const docData = parseBase64(documentImageBase64);
-      contents.push({
-        inlineData: {
-          mimeType: docData.mimeType,
-          data: docData.data
+        if (documentImageBase64) {
+          const docUrl = documentImageBase64.startsWith('data:')
+            ? documentImageBase64
+            : `data:image/jpeg;base64,${documentImageBase64}`;
+          contentItems.push({ type: 'image_url', image_url: { url: docUrl } });
         }
-      });
+
+        if (travelerImageBase64) {
+          const liveUrl = travelerImageBase64.startsWith('data:')
+            ? travelerImageBase64
+            : `data:image/jpeg;base64,${travelerImageBase64}`;
+          contentItems.push({ type: 'image_url', image_url: { url: liveUrl } });
+        }
+
+        const completion = await groq.chat.completions.create({
+          model: 'llama-3.2-11b-vision-preview',
+          messages: [{ role: 'user', content: contentItems }],
+          response_format: { type: 'json_object' },
+          temperature: 0.1,
+        });
+
+        const reply = completion.choices[0]?.message?.content || '{}';
+        const parsed = JSON.parse(reply);
+        return NextResponse.json({
+          isLiveAi: true,
+          provider: 'Groq LPU (Llama 3.2 Vision)',
+          data: parsed
+        });
+      } catch (groqErr: any) {
+        console.warn('Groq face-match error, falling back to Gemini:', groqErr.message);
+      }
     }
 
-    if (travelerImageBase64) {
-      const liveData = parseBase64(travelerImageBase64);
-      contents.push({
-        inlineData: {
-          mimeType: liveData.mimeType,
-          data: liveData.data
+    // 2. SECONDARY: Gemini 3.6 Flash
+    if (geminiKey) {
+      const ai = new GoogleGenAI({ apiKey: geminiKey });
+      const contents: any[] = [];
+
+      const parseBase64 = (b64: string) => {
+        if (b64.includes(',')) {
+          const parts = b64.split(',');
+          const mimeMatch = parts[0].match(/:(.*?);/);
+          return {
+            mimeType: mimeMatch ? mimeMatch[1] : 'image/jpeg',
+            data: parts[1]
+          };
         }
-      });
-    }
-
-    contents.push({ text: prompt });
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
-      contents: contents,
-      config: {
-        responseMimeType: 'application/json',
-        temperature: 0.1
-      }
-    });
-
-    const responseText = response.text || '{}';
-    let parsedResult;
-    try {
-      parsedResult = JSON.parse(responseText);
-    } catch {
-      parsedResult = {
-        faceDetectedInLive: true,
-        faceMatched: false,
-        similarityScore: 25.0,
-        verdict: 'IMPOSTER_MISMATCH',
-        reasoning: 'Biometric landmark parsing deviation.'
+        return { mimeType: 'image/jpeg', data: b64 };
       };
+
+      if (documentImageBase64) {
+        const docData = parseBase64(documentImageBase64);
+        contents.push({
+          inlineData: {
+            mimeType: docData.mimeType,
+            data: docData.data
+          }
+        });
+      }
+
+      if (travelerImageBase64) {
+        const liveData = parseBase64(travelerImageBase64);
+        contents.push({
+          inlineData: {
+            mimeType: liveData.mimeType,
+            data: liveData.data
+          }
+        });
+      }
+
+      contents.push({ text: prompt });
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.6-flash',
+        contents: contents,
+        config: {
+          responseMimeType: 'application/json',
+          temperature: 0.1
+        }
+      });
+
+      const responseText = response.text || '{}';
+      const parsed = JSON.parse(responseText);
+      return NextResponse.json({
+        isLiveAi: true,
+        provider: 'Gemini 3.6 Flash',
+        data: parsed
+      });
     }
 
     return NextResponse.json({
-      isLiveAi: true,
-      data: parsedResult
+      isLiveAi: false,
+      faceDetectedInLive: false,
+      faceMatched: false,
+      similarityScore: 0,
+      verdict: 'NO_FACE_DETECTED',
+      reasoning: 'API keys missing for biometric vision inference.',
+      keyObservations: ['Please configure GROQ_API_KEY or GEMINI_API_KEY in .env.local']
     });
 
   } catch (error: any) {

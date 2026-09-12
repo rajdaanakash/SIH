@@ -19,3 +19,4 @@ opencv-python-headless>=4.9.0
 # AI & LLM Cognitive Inspection (Official Google GenAI SDK)
 google-genai>=1.0.0
 python-dotenv>=1.0.0
+groq>=0.11.0

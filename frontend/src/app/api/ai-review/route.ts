@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
+import Groq from 'groq-sdk';
 import { GoogleGenAI } from '@google/genai';
 import fs from 'fs';
 import path from 'path';
 
-function resolveGeminiApiKey(): string {
-  if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== '') {
-    return process.env.GEMINI_API_KEY.trim();
+function resolveApiKey(keyName: string): string {
+  if (process.env[keyName] && process.env[keyName]?.trim() !== '') {
+    return process.env[keyName]!.trim();
   }
   try {
     const envPath = path.join(process.cwd(), '.env.local');
     if (fs.existsSync(envPath)) {
       const content = fs.readFileSync(envPath, 'utf8');
-      const match = content.match(/GEMINI_API_KEY=(.*)/);
+      const regex = new RegExp(`${keyName}=(.*)`);
+      const match = content.match(regex);
       if (match && match[1] && match[1].trim() !== '') {
         return match[1].trim();
       }
@@ -25,23 +27,8 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { imageBase64, documentType, currentFields } = body;
 
-    const apiKey = resolveGeminiApiKey();
-
-    if (!apiKey) {
-      return NextResponse.json({
-        isLiveAi: false,
-        isValidIdentityDocument: true,
-        message: 'Running in Edge Simulation Mode.',
-        data: {
-          isValidIdentityDocument: true,
-          detectedDocType: 'PASSPORT',
-          recommendedAction: 'CLEAR',
-          aiConfidenceScore: 94.5
-        }
-      });
-    }
-
-    const ai = new GoogleGenAI({ apiKey });
+    const groqKey = resolveApiKey('GROQ_API_KEY');
+    const geminiKey = resolveApiKey('GEMINI_API_KEY');
 
     const prompt = `You are a Senior Forensic Document & Immigration Security Examiner for the Sashastra Seema Bal (SSB), Ministry of Home Affairs, Government of India.
 Analyze this uploaded file for border control verification.
@@ -105,58 +92,99 @@ Return ONLY a valid JSON object matching this schema (no markdown, no backticks 
   "reasoning": "..."
 }`;
 
-    const contents: any[] = [];
+    // 1. PRIMARY ENGINE: Groq (Ultra-Fast LPU Inference with high rate limits)
+    if (groqKey) {
+      try {
+        const groq = new Groq({ apiKey: groqKey });
+        const contentItems: any[] = [{ type: 'text', text: prompt }];
 
-    if (imageBase64 && typeof imageBase64 === 'string' && imageBase64.includes(',')) {
-      const parts = imageBase64.split(',');
-      const mimeMatch = parts[0].match(/:(.*?);/);
-      const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
-      const cleanData = parts[1];
-
-      contents.push({
-        inlineData: {
-          mimeType: mimeType,
-          data: cleanData
+        if (imageBase64 && typeof imageBase64 === 'string') {
+          const cleanUrl = imageBase64.startsWith('data:')
+            ? imageBase64
+            : `data:image/jpeg;base64,${imageBase64}`;
+          contentItems.push({
+            type: 'image_url',
+            image_url: { url: cleanUrl }
+          });
         }
+
+        const completion = await groq.chat.completions.create({
+          model: 'llama-3.2-11b-vision-preview',
+          messages: [{ role: 'user', content: contentItems }],
+          response_format: { type: 'json_object' },
+          temperature: 0.1,
+        });
+
+        const reply = completion.choices[0]?.message?.content || '{}';
+        const parsed = JSON.parse(reply);
+        return NextResponse.json({
+          isLiveAi: true,
+          provider: 'Groq LPU (Llama 3.2 Vision)',
+          data: parsed
+        });
+      } catch (groqErr: any) {
+        console.warn('Groq Vision attempted, falling back to Gemini:', groqErr.message);
+      }
+    }
+
+    // 2. SECONDARY ENGINE: Google Gemini 3.6 Flash
+    if (geminiKey) {
+      const ai = new GoogleGenAI({ apiKey: geminiKey });
+      const contents: any[] = [];
+
+      if (imageBase64 && typeof imageBase64 === 'string' && imageBase64.includes(',')) {
+        const parts = imageBase64.split(',');
+        const mimeMatch = parts[0].match(/:(.*?);/);
+        const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+        const cleanData = parts[1];
+
+        contents.push({
+          inlineData: {
+            mimeType: mimeType,
+            data: cleanData
+          }
+        });
+      }
+
+      contents.push({ text: prompt });
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.6-flash',
+        contents: contents,
+        config: {
+          responseMimeType: 'application/json',
+          temperature: 0.1
+        }
+      });
+
+      const responseText = response.text || '{}';
+      const parsed = JSON.parse(responseText);
+      return NextResponse.json({
+        isLiveAi: true,
+        provider: 'Gemini 3.6 Flash',
+        data: parsed
       });
     }
 
-    contents.push({ text: prompt });
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
-      contents: contents,
-      config: {
-        responseMimeType: 'application/json',
-        temperature: 0.1
+    // 3. Fallback if no keys are provided
+    return NextResponse.json({
+      isLiveAi: false,
+      isValidIdentityDocument: true,
+      message: 'Running in Edge Simulation Mode.',
+      data: {
+        isValidIdentityDocument: true,
+        detectedDocType: 'PASSPORT',
+        recommendedAction: 'CLEAR',
+        aiConfidenceScore: 94.5
       }
     });
 
-    const responseText = response.text || '{}';
-    let parsedResult;
-    try {
-      parsedResult = JSON.parse(responseText);
-    } catch {
-      parsedResult = {
-        isValidIdentityDocument: true,
-        isLiveAi: true,
-        rawText: responseText,
-        recommendedAction: 'CLEAR',
-        aiConfidenceScore: 90.0
-      };
-    }
-
-    return NextResponse.json({
-      isLiveAi: true,
-      data: parsedResult
-    });
-
   } catch (error: any) {
-    console.error('Gemini AI Review Error:', error);
+    console.error('AI Review Route Error:', error);
     return NextResponse.json(
       {
         isLiveAi: false,
-        error: error.message || 'Failed to process AI review with Gemini API.',
+        error: error.message || 'Failed to process AI review.',
         fallbackNotice: 'Edge forensic engine fallback active.'
       },
       { status: 500 }

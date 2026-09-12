@@ -48,6 +48,9 @@ export default function AiReviewCard({ result, onApplyAiResult }: Props) {
       const data = await res.json();
       setIsLiveAi(data.isLiveAi);
       const auditData = data.data || data.analysis;
+      if (auditData) {
+        auditData.provider = data.provider || 'Groq LPU Vision';
+      }
       setAiAnalysis(auditData);
 
       if (data.isLiveAi && auditData && onApplyAiResult) {
@@ -82,7 +85,7 @@ export default function AiReviewCard({ result, onApplyAiResult }: Props) {
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
               <span>Multimodal AI Forensic Audit</span>
               <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 font-bold">
-                Gemini 3.6 Flash
+                {aiAnalysis?.provider || 'Groq LPU / Gemini Vision'}
               </span>
             </h3>
             <span className="text-[10px] text-slate-500 block">
