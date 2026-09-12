@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --card-border: #e2e8f0;
+  
+  --primary: #0f2942;
+  --primary-foreground: #ffffff;
+  --primary-hover: #1e3a8a;
+  
+  --secondary: #f1f5f9;
+  --secondary-foreground: #334155;
+  
+  --muted: #64748b;
+  --muted-background: #f1f5f9;
+  
+  --saffron: #d97706;
+  --saffron-foreground: #ffffff;
+  
+  --success: #059669;
+  --success-background: #ecfdf5;
+  --success-border: #a7f3d0;
+  --success-foreground: #065f46;
+  
+  --warning: #d97706;
+  --warning-background: #fffbeb;
+  --warning-border: #fde68a;
+  --warning-foreground: #92400e;
+  
+  --danger: #dc2626;
+  --danger-background: #fef2f2;
+  --danger-border: #fecaca;
+  --danger-foreground: #991b1b;
+  
+  --border: #cbd5e1;
+  --input: #ffffff;
+  --ring: #2563eb;
+  --radius: 0.75rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0b1324;
+    --foreground: #f8fafc;
+    --card: #131f37;
+    --card-foreground: #f8fafc;
+    --card-border: #1e293b;
+    
+    --primary: #38bdf8;
+    --primary-foreground: #0b1324;
+    --primary-hover: #7dd3fc;
+    
+    --secondary: #1e293b;
+    --secondary-foreground: #cbd5e1;
+    
+    --muted: #94a3b8;
+    --muted-background: #1e293b;
+    
+    --saffron: #f59e0b;
+    --saffron-foreground: #0b1324;
+    
+    --success: #10b981;
+    --success-background: #064e3b;
+    --success-border: #047857;
+    --success-foreground: #ecfdf5;
+    
+    --warning: #fbbf24;
+    --warning-background: #78350f;
+    --warning-border: #b45309;
+    --warning-foreground: #fffbeb;
+    
+    --danger: #ef4444;
+    --danger-background: #7f1d1d;
+    --danger-border: #b91c1c;
+    --danger-foreground: #fef2f2;
+    
+    --border: #334155;
+    --input: #1e293b;
+    --ring: #38bdf8;
+  }
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+button, a, input, select {
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}

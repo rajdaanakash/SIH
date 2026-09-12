@@ -1,0 +1,65 @@
+<svg width="700" height="460" viewBox="0 0 700 460" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f4ede2"/>
+      <stop offset="50%" stop-color="#ebe3d5"/>
+      <stop offset="100%" stop-color="#e0d7c5"/>
+    </linearGradient>
+    <pattern id="guilloche" width="40" height="40" patternUnits="userSpaceOnUse">
+      <circle cx="20" cy="20" r="18" fill="none" stroke="#d8ceb8" stroke-width="0.8" opacity="0.6"/>
+      <circle cx="20" cy="20" r="10" fill="none" stroke="#c9bca2" stroke-width="0.6" opacity="0.5"/>
+    </pattern>
+  </defs>
+
+  <!-- Passport Card Body -->
+  <rect x="10" y="10" width="680" height="440" rx="16" fill="url(#bg)" stroke="#948465" stroke-width="2"/>
+  <rect x="10" y="10" width="680" height="440" rx="16" fill="url(#guilloche)"/>
+
+  <!-- Top Banner -->
+  <rect x="25" y="22" width="650" height="52" rx="8" fill="#0f2942"/>
+  <text x="45" y="46" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#f59e0b" letter-spacing="2">REPUBLIC OF INDIA / भारत गणराज्य</text>
+  <text x="45" y="64" font-family="Arial, sans-serif" font-size="11" fill="#ffffff" opacity="0.9">PASSPORT / पासपोर्ट</text>
+
+  <text x="540" y="46" font-family="Arial, sans-serif" font-size="12" fill="#93c5fd">Type / प्रकार: P</text>
+  <text x="540" y="64" font-family="Arial, sans-serif" font-size="12" fill="#93c5fd">Code / कोड: IND</text>
+
+  <!-- Photo Box -->
+  <rect x="40" y="95" width="150" height="195" rx="6" fill="#334155" stroke="#0f2942" stroke-width="2"/>
+  <!-- Avatar inside Photo Box -->
+  <circle cx="115" cy="160" r="42" fill="#cbd5e1"/>
+  <path d="M60 270 C60 215 170 215 170 270 Z" fill="#cbd5e1"/>
+  <text x="115" y="220" font-family="Arial, sans-serif" font-size="10" fill="#0f2942" text-anchor="middle" font-weight="bold">RAHUL VERMA</text>
+  <rect x="36" y="91" width="158" height="203" rx="8" fill="none" stroke="#10b981" stroke-dasharray="4,4" stroke-width="2"/>
+  <text x="40" y="86" font-family="Arial, sans-serif" font-size="9" fill="#059669" font-weight="bold">[PHOTO SEAM: INTACT]</text>
+
+  <!-- VIZ Text Fields -->
+  <text x="215" y="115" font-family="Arial, sans-serif" font-size="10" fill="#64748b" font-weight="bold">Passport No. / पासपोर्ट नं.</text>
+  <text x="215" y="135" font-family="Courier, monospace" font-size="16" fill="#0f172a" font-weight="bold">Z8941209</text>
+
+  <text x="215" y="165" font-family="Arial, sans-serif" font-size="10" fill="#64748b" font-weight="bold">Surname / उपनाम</text>
+  <text x="215" y="182" font-family="Arial, sans-serif" font-size="14" fill="#0f172a" font-weight="bold">VERMA</text>
+
+  <text x="215" y="205" font-family="Arial, sans-serif" font-size="10" fill="#64748b" font-weight="bold">Given Name(s) / दिया गया नाम</text>
+  <text x="215" y="222" font-family="Arial, sans-serif" font-size="14" fill="#0f172a" font-weight="bold">RAHUL</text>
+
+  <text x="215" y="250" font-family="Arial, sans-serif" font-size="10" fill="#64748b" font-weight="bold">Nationality / राष्ट्रीयता</text>
+  <text x="215" y="268" font-family="Arial, sans-serif" font-size="13" fill="#0f172a" font-weight="bold">INDIAN</text>
+
+  <text x="340" y="250" font-family="Arial, sans-serif" font-size="10" fill="#64748b" font-weight="bold">Sex / लिंग</text>
+  <text x="340" y="268" font-family="Arial, sans-serif" font-size="13" fill="#0f172a" font-weight="bold">M</text>
+
+  <text x="420" y="250" font-family="Arial, sans-serif" font-size="10" fill="#64748b" font-weight="bold">Date of Birth / जन्म तिथि</text>
+  <text x="420" y="268" font-family="Arial, sans-serif" font-size="13" fill="#0f172a" font-weight="bold">14/08/1996</text>
+
+  <text x="215" y="295" font-family="Arial, sans-serif" font-size="10" fill="#64748b" font-weight="bold">Date of Expiry / समाप्ति की तिथि</text>
+  <text x="215" y="312" font-family="Arial, sans-serif" font-size="13" fill="#0f172a" font-weight="bold"><tspan fill="#dc2626" font-weight="bold">13/08/2034 [TAMPERED]</tspan></text>
+
+  <!-- Ashoka Emblem Watermark -->
+  <circle cx="580" cy="200" r="55" fill="none" stroke="#b5a587" stroke-width="1.5" opacity="0.5"/>
+  <text x="580" y="205" font-family="Arial, sans-serif" font-size="10" fill="#b5a587" text-anchor="middle" opacity="0.8">सत्यमेव जयते</text>
+
+  <!-- MRZ Zone Bottom Box -->
+  <rect x="25" y="345" width="650" height="85" rx="6" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="40" y="378" font-family="Courier, monospace" font-size="16" fill="#0f172a" font-weight="bold" letter-spacing="2.5">P&lt;INDFVERMA&lt;&lt;RAHUL&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;</text>
+  <text x="40" y="412" font-family="Courier, monospace" font-size="16" fill="#0f172a" font-weight="bold" letter-spacing="2.5">Z8941209&lt;2IND9608144M<tspan fill="#dc2626">3408138</tspan>&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;0</text>
+</svg>

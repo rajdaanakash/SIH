@@ -1,0 +1,68 @@
+# ==========================================
+# Root .gitignore for SIH 2026 (PS188)
+# Next.js Frontend + FastAPI Python Backend
+# ==========================================
+
+# Environment variables & API keys (Strict Protection)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+*.env.*
+!.env.example
+!.env.local.example
+frontend/.env.local
+
+# Node.js & Next.js Dependencies & Builds
+node_modules/
+frontend/node_modules/
+.next/
+frontend/.next/
+out/
+frontend/out/
+build/
+frontend/build/
+dist/
+frontend/dist/
+
+# Next.js & Vercel Caches
+.turbo/
+.vercel/
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Python (FastAPI Backend)
+__pycache__/
+backend/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+backend/venv/
+backend/.venv/
+.pytest_cache/
+
+# Logs & Diagnostics
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor & Workspace configs
+.idea/
+.vscode/*.log
