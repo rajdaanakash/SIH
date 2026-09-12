@@ -14,6 +14,8 @@
 !.env.example
 !.env.local.example
 frontend/.env.local
+!frontend/.env.local.example
+!frontend/.env.example
 
 # Node.js & Next.js Dependencies & Builds
 node_modules/
