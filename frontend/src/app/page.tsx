@@ -208,6 +208,39 @@ export default function Home() {
     reader.readAsDataURL(file);
   };
 
+  const handleUpdateBiometrics = (bioUpdate: {
+    faceMatched: boolean;
+    similarityScore: number;
+    livePhotoUrl: string;
+    observations?: string[];
+  }) => {
+    setCurrentResult((prev) => {
+      const newRiskScore = bioUpdate.faceMatched
+        ? Math.min(prev.riskScore, 20)
+        : Math.max(prev.riskScore, 88);
+      const newVerdict = bioUpdate.faceMatched
+        ? (newRiskScore > 60 ? 'DETAIN' : 'CLEAR')
+        : 'DETAIN';
+
+      return {
+        ...prev,
+        liveTravelerPhotoUrl: bioUpdate.livePhotoUrl,
+        biometricDetails: {
+          ...prev.biometricDetails,
+          faceMatched: bioUpdate.faceMatched,
+          similarityScore: bioUpdate.similarityScore,
+          livenessVerified: true,
+        },
+        riskScore: newRiskScore,
+        riskLevel: newRiskScore > 65 ? 'HIGH' : newRiskScore > 25 ? 'MEDIUM' : 'LOW',
+        verdict: newVerdict as any,
+        executiveSummary: bioUpdate.faceMatched
+          ? 'Live passenger biometrically verified against document portrait with high confidence.'
+          : 'CRITICAL ALERT: 1:1 Biometric Facial Mismatch. Live passenger does NOT match the document portrait.',
+      };
+    });
+  };
+
   const handleApplyAiResult = (aiData: any) => {
     if (!aiData) return;
     const isTampered = aiData.tamperDetected === true;
@@ -304,7 +337,7 @@ export default function Home() {
         <VerificationChecklist result={currentResult} />
 
         {/* 5. Biometric 1:1 Facial Matcher */}
-        <BiometricMatcher result={currentResult} />
+        <BiometricMatcher result={currentResult} onUpdateBiometrics={handleUpdateBiometrics} />
 
         {/* 6. Threat Risk Meter & Assessment Gauge */}
         <RiskMeter score={currentResult.riskScore} level={currentResult.riskLevel} summary={currentResult.executiveSummary} />
