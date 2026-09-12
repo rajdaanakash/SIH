@@ -1,48 +1,62 @@
-// Utility to convert any image source (SVG URL, blob URL, data URL, Image element)
-// into a standardized JPEG Base64 string for Gemini Multimodal Vision API
+// High-efficiency client-side image downscaling and compression
+// Compresses 10MB-20MB mobile camera photos into lightweight ~200KB payloads
+// to prevent 413 Payload Too Large and HTML error responses over Dev Tunnels / Proxies
 
-export async function ensureJpegBase64(imageSrc: string): Promise<string> {
+export async function compressAndResizeImage(
+  imageSrc: string,
+  maxDimension: number = 1024,
+  quality: number = 0.82
+): Promise<string> {
   if (!imageSrc) return '';
-
-  // If it is already a JPEG or PNG data URL and not an SVG data URL
-  if (imageSrc.startsWith('data:image/jpeg') || imageSrc.startsWith('data:image/png') || imageSrc.startsWith('data:image/webp')) {
-    return imageSrc;
-  }
 
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
+
     img.onload = () => {
       try {
+        let width = img.naturalWidth || img.width || 800;
+        let height = img.naturalHeight || img.height || 600;
+
+        // Scale down proportionally if exceeding maxDimension
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+
         const canvas = document.createElement('canvas');
-        canvas.width = Math.max(640, img.naturalWidth || 800);
-        canvas.height = Math.max(480, img.naturalHeight || 600);
+        canvas.width = width;
+        canvas.height = height;
         const ctx = canvas.getContext('2d');
+
         if (ctx) {
           ctx.fillStyle = '#FFFFFF';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          const jpegBase64 = canvas.toDataURL('image/jpeg', 0.88);
-          resolve(jpegBase64);
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressed);
           return;
         }
       } catch (err) {
-        console.warn('Canvas rasterization notice:', err);
+        console.warn('Client compression error:', err);
       }
       resolve(imageSrc);
     };
+
     img.onerror = () => {
-      // If direct load fails, try fetch -> blob -> dataURL
-      fetch(imageSrc)
-        .then((res) => res.blob())
-        .then((blob) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.onerror = () => resolve(imageSrc);
-          reader.readAsDataURL(blob);
-        })
-        .catch(() => resolve(imageSrc));
+      resolve(imageSrc);
     };
+
     img.src = imageSrc;
   });
+}
+
+// Ensure clean JPEG Base64 with automatic compression
+export async function ensureJpegBase64(imageSrc: string): Promise<string> {
+  return compressAndResizeImage(imageSrc, 1024, 0.82);
 }

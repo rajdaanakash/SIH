@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { VerificationResult, BiometricMatchResult } from '../lib/types';
-import { ensureJpegBase64 } from '../lib/imageUtils';
+import { compressAndResizeImage, ensureJpegBase64 } from '../lib/imageUtils';
 import { Camera, RefreshCw, Sparkles, CheckCircle2, XCircle, FlipHorizontal, Upload, X, AlertTriangle, AlertCircle } from 'lucide-react';
 
 interface Props {
@@ -44,7 +44,7 @@ export default function BiometricMatcher({ result, onUpdateBiometrics }: Props) 
       setCameraActive(true);
     } catch (err: any) {
       console.warn('Camera stream error:', err);
-      setFaceWarning('Camera permission required. You can also tap Upload to snap a photo.');
+      setFaceWarning('Camera permission needed. You can also tap Upload to snap a photo.');
       fileInputRef.current?.click();
     }
   };
@@ -63,27 +63,30 @@ export default function BiometricMatcher({ result, onUpdateBiometrics }: Props) 
     };
   }, []);
 
-  const capturePhoto = () => {
+  const capturePhoto = async () => {
     if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
+    canvas.width = Math.min(640, video.videoWidth || 640);
+    canvas.height = Math.min(480, video.videoHeight || 480);
     const ctx = canvas.getContext('2d');
     if (ctx) {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+      const rawDataUrl = canvas.toDataURL('image/jpeg', 0.82);
       stopCamera();
-      processPassengerPhoto(dataUrl);
+      const compressedDataUrl = await compressAndResizeImage(rawDataUrl, 800, 0.80);
+      processPassengerPhoto(compressedDataUrl);
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const reader = new FileReader();
-      reader.onload = (event) => {
-        const dataUrl = event.target?.result as string;
-        processPassengerPhoto(dataUrl);
+      reader.onload = async (event) => {
+        const rawDataUrl = event.target?.result as string;
+        // Compress phone camera photo to lightweight ~200KB
+        const compressedDataUrl = await compressAndResizeImage(rawDataUrl, 800, 0.80);
+        processPassengerPhoto(compressedDataUrl);
       };
       reader.readAsDataURL(e.target.files[0]);
     }
@@ -95,7 +98,7 @@ export default function BiometricMatcher({ result, onUpdateBiometrics }: Props) 
     setObservations([]);
 
     try {
-      // Ensure document image is properly rasterized to JPEG base64
+      // Ensure document image is properly downscaled & compressed to avoid 413 payload error
       const docBase64 = await ensureJpegBase64(result.documentImageUrl);
 
       const res = await fetch('/api/face-match', {
@@ -107,7 +110,16 @@ export default function BiometricMatcher({ result, onUpdateBiometrics }: Props) 
         }),
       });
 
-      const resData = await res.json();
+      const text = await res.text();
+      let resData: any = null;
+      try {
+        resData = JSON.parse(text);
+      } catch (jsonErr) {
+        console.error('Non-JSON server response:', text.slice(0, 150));
+        setFaceWarning('Server connection timed out or busy. Please try snapping again.');
+        return;
+      }
+
       const matchData = resData.data || resData;
 
       if (matchData.verdict === 'NO_FACE_DETECTED' || matchData.faceDetectedInLive === false) {
@@ -144,9 +156,9 @@ export default function BiometricMatcher({ result, onUpdateBiometrics }: Props) 
           observations: obs,
         });
       }
-    } catch (err) {
-      console.error('Biometric match error:', err);
-      setFaceWarning('Biometric vision check encountered an issue. Please ensure proper lighting and re-snap.');
+    } catch (err: any) {
+      console.error('Biometric match network error:', err);
+      setFaceWarning('Biometric check encountered a connection issue. Please re-snap.');
     } finally {
       setIsComparing(false);
     }
@@ -263,7 +275,7 @@ export default function BiometricMatcher({ result, onUpdateBiometrics }: Props) 
       {isComparing && (
         <div className="mb-3 p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300 text-xs flex items-center gap-2 animate-pulse font-medium">
           <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
-          <span>Gemini 3.6 Flash cross-matching passenger face against document portrait...</span>
+          <span>Qwen 3.8 Vision on Groq LPU cross-matching passenger face against document portrait...</span>
         </div>
       )}
 

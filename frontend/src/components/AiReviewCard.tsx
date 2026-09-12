@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Sparkles, Bot, CheckCircle2, AlertTriangle, ShieldAlert, Cpu, RefreshCw, Key } from 'lucide-react';
 import { VerificationResult } from '../lib/types';
+import { ensureJpegBase64 } from '../lib/imageUtils';
 
 interface Props {
   result: VerificationResult;
@@ -35,6 +36,9 @@ export default function AiReviewCard({ result, onApplyAiResult }: Props) {
         }
       }
 
+      // Ensure base64 is compressed to lightweight JPEG payload
+      imageBase64 = await ensureJpegBase64(imageBase64);
+
       const res = await fetch('/api/ai-review', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -45,7 +49,15 @@ export default function AiReviewCard({ result, onApplyAiResult }: Props) {
         }),
       });
 
-      const data = await res.json();
+      const text = await res.text();
+      let data: any = null;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        console.error('Non-JSON response from /api/ai-review:', text.slice(0, 100));
+        data = { isLiveAi: false };
+      }
+
       setIsLiveAi(data.isLiveAi);
       const auditData = data.data || data.analysis;
       if (auditData) {

@@ -12,6 +12,7 @@ import AiReviewCard from '../components/AiReviewCard';
 import { SCENARIO_PRESETS } from '../lib/presets';
 import { ScenarioPreset, VerificationResult } from '../lib/types';
 import { computeClientEla } from '../lib/elaEngine';
+import { compressAndResizeImage } from '../lib/imageUtils';
 import { ShieldCheck, RefreshCw, Smartphone, AlertCircle, AlertOctagon, Sparkles, RotateCcw } from 'lucide-react';
 
 const BLANK_TERMINAL_RESULT: VerificationResult = {
@@ -100,11 +101,13 @@ export default function Home() {
   const handleCustomUpload = async (file: File) => {
     setIsScanning(true);
     setInvalidDocAlert(null);
-    setScanStatusText('Gemini 3.6 Flash classifying & validating document type...');
+    setScanStatusText('AI Screening & Validating Document Type...');
 
     const reader = new FileReader();
     reader.onload = async (e) => {
-      const base64Url = e.target?.result as string;
+      const rawBase64 = e.target?.result as string;
+      // Compress and downscale uploaded photo to avoid 413 / payload timeout
+      const base64Url = await compressAndResizeImage(rawBase64, 1024, 0.82);
 
       // Compute client ELA for heatmap layer
       let elaScore = 0.12;
@@ -121,7 +124,7 @@ export default function Home() {
         console.warn('ELA computation notice:', err);
       }
 
-      // Call Gemini 3.6 Flash Vision endpoint for Pre-Validation & Forensics
+      // Call AI Vision endpoint for Pre-Validation & Forensics
       let aiData: any = null;
       try {
         const res = await fetch('/api/ai-review', {
@@ -132,12 +135,18 @@ export default function Home() {
             documentType: 'PASSPORT',
           }),
         });
-        const json = await res.json();
-        if (json.isLiveAi && json.data) {
+        const text = await res.text();
+        let json: any = null;
+        try {
+          json = JSON.parse(text);
+        } catch {
+          console.error('Non-JSON response from /api/ai-review:', text.slice(0, 100));
+        }
+        if (json && json.isLiveAi && json.data) {
           aiData = json.data;
         }
       } catch (err) {
-        console.error('Error invoking Gemini 3.6 Flash API:', err);
+        console.error('Error invoking AI Screening API:', err);
       }
 
       // GATEKEEPER CHECK: Is the document a valid identity/travel document?
