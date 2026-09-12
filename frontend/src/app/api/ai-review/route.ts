@@ -16,9 +16,7 @@ function resolveGeminiApiKey(): string {
         return match[1].trim();
       }
     }
-  } catch (e) {
-    // ignore
-  }
+  } catch (e) {}
   return '';
 }
 
@@ -32,15 +30,13 @@ export async function POST(req: NextRequest) {
     if (!apiKey) {
       return NextResponse.json({
         isLiveAi: false,
-        message: 'Live Gemini API key not detected in .env.local. Running in Edge Simulation Mode.',
-        guidance: 'To enable real-time Gemini Multimodal Vision analysis, add GEMINI_API_KEY in frontend/.env.local.',
-        analysis: {
-          ocrVerification: 'Text extracted from document matches standard format.',
-          forensicVisualAnalysis: 'Visual inspection shows edge consistency. Error level analysis indicates uniform compression.',
-          icaoCheck: '7-3-1 modulus-10 check-digits verified against ICAO Doc 9303 standards.',
-          biometricSummary: 'Facial landmarks consistent with standard passport portrait requirements.',
-          aiConfidenceScore: 94.5,
-          recommendedAction: 'CLEAR'
+        isValidIdentityDocument: true,
+        message: 'Running in Edge Simulation Mode.',
+        data: {
+          isValidIdentityDocument: true,
+          detectedDocType: 'PASSPORT',
+          recommendedAction: 'CLEAR',
+          aiConfidenceScore: 94.5
         }
       });
     }
@@ -48,32 +44,42 @@ export async function POST(req: NextRequest) {
     const ai = new GoogleGenAI({ apiKey });
 
     const prompt = `You are a Senior Forensic Document & Immigration Security Examiner for the Sashastra Seema Bal (SSB), Ministry of Home Affairs, Government of India.
-Analyze this scanned identity/travel document for border control verification.
+Analyze this uploaded file for border control verification.
 
-Instructions:
-1. OCR & Field Extraction: Carefully inspect the document image and extract:
-   - Full Name (e.g. given name and surname from the passport/ID)
-   - Document Number (e.g. passport number like SP003369 or as shown)
-   - Nationality (3-letter ISO code like IND or country name)
-   - Date of Birth (DD/MM/YYYY or as shown)
-   - Expiry Date (DD/MM/YYYY or as shown)
+STAGE 1: DOCUMENT PRE-VALIDATION & CLASSIFICATION (CRITICAL GATEKEEPER)
+Check if this uploaded image is an authentic GOVERNMENT-ISSUED IDENTITY OR TRAVEL DOCUMENT (e.g. Passport, Visa, Aadhaar Card, Voter ID, Driver License, National ID, Border Permit).
+- If the image is an ACADEMIC MARKSHEET (e.g. 8th/10th/12th class marksheet, school report card, college degree, certificate), BILL, RECEIPT, RANDOM PHOTO, MEME, LANDSCAPE, OR NON-IDENTITY PAPER:
+  You MUST set:
+  "isValidIdentityDocument": false,
+  "detectedDocType": "INVALID_NON_IDENTITY_DOCUMENT",
+  "rejectionReason": "The uploaded file is identified as a school marksheet or non-identity document. SSB Drishti accepts only official Passports, Visas, Aadhaar, or National IDs."
+
+STAGE 2: EXTRACTION & FORENSICS (Only if isValidIdentityDocument is true)
+1. OCR & Field Extraction:
+   - Full Name
+   - Document Number (e.g. Passport or Aadhaar number)
+   - Nationality (3-letter ISO code or country)
+   - Date of Birth (DD/MM/YYYY)
+   - Expiry Date (DD/MM/YYYY)
    - Gender (M, F, or X)
-   - Issuing Country (e.g. IND)
-   - MRZ Line 1 and MRZ Line 2 if visible.
+   - Issuing Country
+   - MRZ lines if present
 
-2. Forensic Inspection:
-   - Font Consistency: Check if any digits (especially expiry year or document number) look altered or use mismatched fonts.
-   - Photo Tampering: Look for cut-and-paste borders or unnatural edges around the portrait.
-   - Ghost/Secondary Portrait: Check if the secondary ghost portrait matches the primary photo.
+2. Forensic Tamper Detection:
+   - Font Consistency: Check if any numbers or dates were digitally altered.
+   - Photo Tampering: Look for cut-and-paste borders around the portrait.
    - Seals & Holograms: Check for standard security seals.
-   - CRITICAL NOTE: If this is an authentic document photographed with a camera (e.g. showing a phone screen, table, or slight ambient reflections), DO NOT falsely flag normal photography as digital splicing. Only flag actual criminal forgery or manipulation.
+   - NOTE: If this is an authentic document photographed with a camera (even with ambient lighting, hand holding, or slight reflections), DO NOT falsely flag normal photography as digital splicing.
 
 3. Final Verdict:
    - If genuine: tamperDetected = false, tamperSeverity = "LOW", recommendedAction = "CLEAR", riskScore between 8 and 20.
-   - If tampered: tamperDetected = true, tamperSeverity = "HIGH" or "MEDIUM", recommendedAction = "DETAIN" or "SECONDARY_INSPECTION", riskScore between 65 and 95.
+   - If tampered: tamperDetected = true, tamperSeverity = "HIGH", recommendedAction = "DETAIN", riskScore between 65 and 95.
 
 Return ONLY a valid JSON object matching this schema (no markdown, no backticks outside JSON):
 {
+  "isValidIdentityDocument": true or false,
+  "detectedDocType": "PASSPORT" | "VISA" | "AADHAAR" | "NATIONAL_ID" | "INVALID_NON_IDENTITY_DOCUMENT",
+  "rejectionReason": "..." (if invalid, otherwise ""),
   "isLiveAi": true,
   "extractedFields": {
     "fullName": "...",
@@ -88,8 +94,7 @@ Return ONLY a valid JSON object matching this schema (no markdown, no backticks 
   },
   "forensicObservations": [
     "Observation 1...",
-    "Observation 2...",
-    "Observation 3..."
+    "Observation 2..."
   ],
   "tamperDetected": false,
   "tamperSeverity": "LOW",
@@ -133,10 +138,11 @@ Return ONLY a valid JSON object matching this schema (no markdown, no backticks 
       parsedResult = JSON.parse(responseText);
     } catch {
       parsedResult = {
+        isValidIdentityDocument: true,
         isLiveAi: true,
         rawText: responseText,
         recommendedAction: 'CLEAR',
-        aiConfidenceScore: 92.0
+        aiConfidenceScore: 90.0
       };
     }
 

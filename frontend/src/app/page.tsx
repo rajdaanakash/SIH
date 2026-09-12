@@ -12,13 +12,80 @@ import AiReviewCard from '../components/AiReviewCard';
 import { SCENARIO_PRESETS } from '../lib/presets';
 import { ScenarioPreset, VerificationResult } from '../lib/types';
 import { computeClientEla } from '../lib/elaEngine';
-import { ShieldCheck, RefreshCw, Smartphone, AlertCircle, Sparkles } from 'lucide-react';
+import { ShieldCheck, RefreshCw, Smartphone, AlertCircle, AlertOctagon, Sparkles, RotateCcw } from 'lucide-react';
+
+const BLANK_TERMINAL_RESULT: VerificationResult = {
+  id: 'READY',
+  timestamp: 'Awaiting Scan',
+  tokenNumber: 'SSB-2026-READY',
+  documentType: 'PASSPORT',
+  extractedFields: {
+    fullName: 'AWAITING PASSENGER SCAN',
+    documentNumber: '---------',
+    nationality: '---',
+    dateOfBirth: '--/--/----',
+    expiryDate: '--/--/----',
+    gender: 'M',
+    issuingCountry: '---',
+    mrzLine1: '',
+    mrzLine2: '',
+  },
+  icaoDetails: {
+    documentNumberValid: false,
+    dobValid: false,
+    expiryValid: false,
+    compositeValid: false,
+    rawAlgorithm: 'ICAO Doc 9303 Part 3/7 (Modulus 10, 7-3-1 weights)',
+    overallIcaoCompliant: false,
+    notes: ['Terminal cleared. Ready for next traveler document.'],
+  },
+  tamperDetails: {
+    photoReplacementDetected: false,
+    photoSeamConfidence: 0,
+    textManipulationDetected: false,
+    fontInconsistencyScore: 0,
+    stampForgeryDetected: false,
+    stampCircularityAnomaly: 0,
+    elaAnomalyScore: 0,
+    metadataTampered: false,
+    flaggedRegions: [],
+  },
+  biometricDetails: {
+    faceMatched: false,
+    similarityScore: 0,
+    livenessVerified: false,
+    livenessConfidence: 0,
+    faceDetectedInDocument: false,
+    liveFeedAvailable: false,
+  },
+  watchlistHit: false,
+  riskScore: 0,
+  riskLevel: 'LOW',
+  verdict: 'CLEAR',
+  executiveSummary: 'TERMINAL READY: Scan passenger identity document (Passport, Visa, Aadhaar) to begin automated screening.',
+  documentImageUrl: '/samples/passport_clean.svg',
+  documentFaceUrl: '/samples/face_clean_doc.svg',
+  liveTravelerPhotoUrl: '/samples/face_clean_live.svg',
+};
 
 export default function Home() {
   const [activePreset, setActivePreset] = useState<ScenarioPreset>(SCENARIO_PRESETS[0]);
   const [currentResult, setCurrentResult] = useState<VerificationResult>(SCENARIO_PRESETS[0].data);
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [scanStatusText, setScanStatusText] = useState<string>('Analyzing document telemetry...');
+  const [invalidDocAlert, setInvalidDocAlert] = useState<{
+    detectedType: string;
+    reason: string;
+  } | null>(null);
+
+  const handleResetTerminal = () => {
+    setCurrentResult({
+      ...BLANK_TERMINAL_RESULT,
+      timestamp: new Date().toLocaleString('en-IN') + ' IST',
+      tokenNumber: `SSB-2026-${Math.floor(10000 + Math.random() * 90000)}`,
+    });
+    setInvalidDocAlert(null);
+  };
 
   const handleSelectPreset = (preset: ScenarioPreset) => {
     setIsScanning(true);
@@ -32,7 +99,8 @@ export default function Home() {
 
   const handleCustomUpload = async (file: File) => {
     setIsScanning(true);
-    setScanStatusText('Gemini 3.6 Flash Vision analyzing uploaded document...');
+    setInvalidDocAlert(null);
+    setScanStatusText('Gemini 3.6 Flash classifying & validating document type...');
 
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -53,7 +121,7 @@ export default function Home() {
         console.warn('ELA computation notice:', err);
       }
 
-      // Call Gemini 3.6 Flash Vision endpoint
+      // Call Gemini 3.6 Flash Vision endpoint for Pre-Validation & Forensics
       let aiData: any = null;
       try {
         const res = await fetch('/api/ai-review', {
@@ -72,6 +140,16 @@ export default function Home() {
         console.error('Error invoking Gemini 3.6 Flash API:', err);
       }
 
+      // GATEKEEPER CHECK: Is the document a valid identity/travel document?
+      if (aiData && aiData.isValidIdentityDocument === false) {
+        setInvalidDocAlert({
+          detectedType: aiData.detectedDocType || 'NON_IDENTITY_DOCUMENT',
+          reason: aiData.rejectionReason || 'Uploaded file is a marksheet, certificate, or non-identity document. Please upload an official Passport, Visa, or Government ID.',
+        });
+        setIsScanning(false);
+        return;
+      }
+
       if (aiData && aiData.extractedFields) {
         const isTampered = aiData.tamperDetected === true;
         const riskScore = aiData.riskScore !== undefined ? aiData.riskScore : isTampered ? 82 : 14;
@@ -81,7 +159,7 @@ export default function Home() {
           id: `CUSTOM-${Date.now().toString().slice(-4)}`,
           timestamp: new Date().toLocaleString('en-IN') + ' IST',
           tokenNumber: `SSB-2026-${Math.floor(10000 + Math.random() * 90000)}`,
-          documentType: 'PASSPORT',
+          documentType: aiData.detectedDocType === 'VISA' ? 'VISA' : 'PASSPORT',
           extractedFields: {
             fullName: aiData.extractedFields.fullName || 'VERIFIED PASSPORT HOLDER',
             documentNumber: aiData.extractedFields.documentNumber || 'SP003369',
@@ -125,7 +203,7 @@ export default function Home() {
               : [],
           },
           biometricDetails: {
-            faceMatched: !isTampered,
+            faceMatched: true,
             similarityScore: isTampered ? 51.2 : 94.6,
             livenessVerified: true,
             livenessConfidence: 96.0,
@@ -215,8 +293,24 @@ export default function Home() {
     observations?: string[];
   }) => {
     setCurrentResult((prev) => {
+      // If no face was detected (ceiling/empty), do not approve transit
+      if (bioUpdate.similarityScore === 0) {
+        return {
+          ...prev,
+          liveTravelerPhotoUrl: bioUpdate.livePhotoUrl,
+          biometricDetails: {
+            ...prev.biometricDetails,
+            faceMatched: false,
+            similarityScore: 0,
+            livenessVerified: false,
+          },
+          verdict: 'SECONDARY_INSPECTION',
+          executiveSummary: 'BIOMETRIC NOTICE: No human face detected in camera frame. Please center traveler face in oval.',
+        };
+      }
+
       const newRiskScore = bioUpdate.faceMatched
-        ? Math.min(prev.riskScore, 20)
+        ? Math.min(prev.riskScore, 18)
         : Math.max(prev.riskScore, 88);
       const newVerdict = bioUpdate.faceMatched
         ? (newRiskScore > 60 ? 'DETAIN' : 'CLEAR')
@@ -301,9 +395,13 @@ export default function Home() {
               Mobile-First Field Viewport Active • Optimized for SSB Handheld Checkpoint Terminals
             </span>
           </div>
-          <span className="hidden sm:inline-block text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-blue-200 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
-            SIH Prototype
-          </span>
+          <button
+            onClick={handleResetTerminal}
+            className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded bg-blue-200 hover:bg-blue-300 dark:bg-blue-900 dark:hover:bg-blue-800 text-blue-900 dark:text-blue-100 transition cursor-pointer"
+          >
+            <RotateCcw className="w-3 h-3" />
+            <span>Reset Form</span>
+          </button>
         </div>
 
         {/* 1. Evaluation Scenario Selector */}
@@ -312,6 +410,30 @@ export default function Home() {
           onSelectPreset={handleSelectPreset}
           onCustomUpload={handleCustomUpload}
         />
+
+        {/* Invalid Document Pre-Validation Modal Alert */}
+        {invalidDocAlert && (
+          <div className="p-4 rounded-xl bg-rose-500/10 border-2 border-rose-500 text-slate-900 dark:text-slate-100 space-y-2 animate-in fade-in">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400 font-bold text-sm">
+                <AlertOctagon className="w-5 h-5" />
+                <span>INVALID DOCUMENT REJECTED</span>
+              </div>
+              <button
+                onClick={() => setInvalidDocAlert(null)}
+                className="px-2.5 py-1 rounded bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
+            <p className="text-xs text-slate-700 dark:text-slate-300">
+              {invalidDocAlert.reason}
+            </p>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 pt-1 border-t border-rose-200 dark:border-rose-900/60">
+              ⚠️ <b>Security Notice:</b> SSB Drishti only processes Passports, Visas, Aadhaar, or National IDs. Academic marksheets, certificates, bills, and non-identity papers are rejected at gatekeeping.
+            </div>
+          </div>
+        )}
 
         {/* Loading / Diagnostic Scanner Banner */}
         {isScanning && (
@@ -337,14 +459,24 @@ export default function Home() {
         <VerificationChecklist result={currentResult} />
 
         {/* 5. Biometric 1:1 Facial Matcher */}
-        <BiometricMatcher result={currentResult} onUpdateBiometrics={handleUpdateBiometrics} />
+        <BiometricMatcher
+          result={currentResult}
+          onUpdateBiometrics={handleUpdateBiometrics}
+        />
 
         {/* 6. Threat Risk Meter & Assessment Gauge */}
-        <RiskMeter score={currentResult.riskScore} level={currentResult.riskLevel} summary={currentResult.executiveSummary} />
+        <RiskMeter
+          score={currentResult.riskScore}
+          level={currentResult.riskLevel}
+          summary={currentResult.executiveSummary}
+        />
       </main>
 
-      {/* Sticky Quick-Action Dock */}
-      <ActionDock result={currentResult} />
+      {/* Sticky Quick-Action Dock with Next Passenger Reset */}
+      <ActionDock
+        result={currentResult}
+        onResetTerminal={handleResetTerminal}
+      />
     </div>
   );
 }

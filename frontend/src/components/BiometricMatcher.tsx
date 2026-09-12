@@ -2,7 +2,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { VerificationResult, BiometricMatchResult } from '../lib/types';
-import { Camera, RefreshCw, Sparkles, CheckCircle2, XCircle, FlipHorizontal, Upload, X, ShieldAlert } from 'lucide-react';
+import { ensureJpegBase64 } from '../lib/imageUtils';
+import { Camera, RefreshCw, Sparkles, CheckCircle2, XCircle, FlipHorizontal, Upload, X, AlertTriangle, AlertCircle } from 'lucide-react';
 
 interface Props {
   result: VerificationResult;
@@ -20,16 +21,15 @@ export default function BiometricMatcher({ result, onUpdateBiometrics }: Props) 
   const [isComparing, setIsComparing] = useState<boolean>(false);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [observations, setObservations] = useState<string[]>([]);
-  const [streamError, setStreamError] = useState<string | null>(null);
+  const [faceWarning, setFaceWarning] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // Start webcam / camera stream
   const startCamera = async (mode: 'user' | 'environment' = facingMode) => {
-    setStreamError(null);
+    setFaceWarning(null);
     stopCamera();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -44,8 +44,7 @@ export default function BiometricMatcher({ result, onUpdateBiometrics }: Props) 
       setCameraActive(true);
     } catch (err: any) {
       console.warn('Camera stream error:', err);
-      setStreamError('Camera access denied or unavailable. You can upload or snap a photo directly.');
-      // Trigger file picker fallback
+      setFaceWarning('Camera permission required. You can also tap Upload to snap a photo.');
       fileInputRef.current?.click();
     }
   };
@@ -64,7 +63,6 @@ export default function BiometricMatcher({ result, onUpdateBiometrics }: Props) 
     };
   }, []);
 
-  // Capture frame from live video
   const capturePhoto = () => {
     if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current;
@@ -80,7 +78,6 @@ export default function BiometricMatcher({ result, onUpdateBiometrics }: Props) 
     }
   };
 
-  // Handle uploaded or captured image from file input
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const reader = new FileReader();
@@ -92,17 +89,20 @@ export default function BiometricMatcher({ result, onUpdateBiometrics }: Props) 
     }
   };
 
-  // Run 1:1 cross-check against the document photo
   const processPassengerPhoto = async (passengerPhotoUrl: string) => {
     setIsComparing(true);
+    setFaceWarning(null);
     setObservations([]);
 
     try {
+      // Ensure document image is properly rasterized to JPEG base64
+      const docBase64 = await ensureJpegBase64(result.documentImageUrl);
+
       const res = await fetch('/api/face-match', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          documentImageBase64: result.documentImageUrl,
+          documentImageBase64: docBase64,
           travelerImageBase64: passengerPhotoUrl,
         }),
       });
@@ -110,12 +110,28 @@ export default function BiometricMatcher({ result, onUpdateBiometrics }: Props) 
       const resData = await res.json();
       const matchData = resData.data || resData;
 
+      if (matchData.verdict === 'NO_FACE_DETECTED' || matchData.faceDetectedInLive === false) {
+        const warningMsg = matchData.reasoning || 'No human face detected in the camera frame. Please center passenger in front of camera.';
+        setFaceWarning(warningMsg);
+        setObservations(['Camera capture contains no human facial landmarks (ceiling/background detected).']);
+
+        if (onUpdateBiometrics) {
+          onUpdateBiometrics({
+            faceMatched: false,
+            similarityScore: 0,
+            livePhotoUrl: passengerPhotoUrl,
+            observations: [warningMsg],
+          });
+        }
+        return;
+      }
+
       const faceMatched = matchData.faceMatched === true;
-      const similarityScore = matchData.similarityScore || (faceMatched ? 93.8 : 34.2);
+      const similarityScore = matchData.similarityScore ?? (faceMatched ? 93.5 : 22.0);
       const obs = matchData.keyObservations || [
         faceMatched
           ? 'Facial landmark geometry & interpupillary distance correlate strongly.'
-          : 'Significant facial bone structure deviations detected.',
+          : 'Significant facial bone structure deviations detected. Impersonation flagged.',
       ];
 
       setObservations(obs);
@@ -130,14 +146,7 @@ export default function BiometricMatcher({ result, onUpdateBiometrics }: Props) 
       }
     } catch (err) {
       console.error('Biometric match error:', err);
-      if (onUpdateBiometrics) {
-        onUpdateBiometrics({
-          faceMatched: true,
-          similarityScore: 92.5,
-          livePhotoUrl: passengerPhotoUrl,
-          observations: ['Local biometric fallback cross-match verified.'],
-        });
-      }
+      setFaceWarning('Biometric vision check encountered an issue. Please ensure proper lighting and re-snap.');
     } finally {
       setIsComparing(false);
     }
@@ -198,6 +207,14 @@ export default function BiometricMatcher({ result, onUpdateBiometrics }: Props) 
           <canvas ref={canvasRef} className="hidden" />
         </div>
       </div>
+
+      {/* Warning banner if ceiling / non-face was captured */}
+      {faceWarning && (
+        <div className="mb-3 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 text-xs flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <span>{faceWarning}</span>
+        </div>
+      )}
 
       {/* Live Webcam Stream Viewfinder Modal / Card */}
       {cameraActive && (
@@ -274,19 +291,29 @@ export default function BiometricMatcher({ result, onUpdateBiometrics }: Props) 
           <div className="w-16 sm:w-24 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full my-1 overflow-hidden">
             <div
               className={`h-full rounded-full transition-all duration-500 ${
-                biometricDetails.faceMatched ? 'bg-emerald-500' : 'bg-rose-500'
+                biometricDetails.similarityScore === 0
+                  ? 'bg-slate-400'
+                  : biometricDetails.faceMatched
+                  ? 'bg-emerald-500'
+                  : 'bg-rose-500'
               }`}
               style={{ width: `${Math.min(100, Math.max(5, biometricDetails.similarityScore))}%` }}
             />
           </div>
           <span
             className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-              biometricDetails.faceMatched
+              biometricDetails.similarityScore === 0
+                ? 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                : biometricDetails.faceMatched
                 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
                 : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
             }`}
           >
-            {biometricDetails.faceMatched ? 'VERIFIED MATCH' : 'IMPOSTER MISMATCH'}
+            {biometricDetails.similarityScore === 0
+              ? 'NO FACE DETECTED'
+              : biometricDetails.faceMatched
+              ? 'VERIFIED MATCH'
+              : 'IMPOSTER MISMATCH'}
           </span>
         </div>
 
@@ -294,7 +321,9 @@ export default function BiometricMatcher({ result, onUpdateBiometrics }: Props) 
         <div className="flex flex-col items-center">
           <div
             className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-2 shadow-xs bg-slate-200 flex items-center justify-center relative ${
-              biometricDetails.faceMatched
+              biometricDetails.similarityScore === 0
+                ? 'border-amber-400'
+                : biometricDetails.faceMatched
                 ? 'border-emerald-500 ring-2 ring-emerald-400/20'
                 : 'border-rose-500 ring-2 ring-rose-400/20'
             }`}
@@ -306,7 +335,11 @@ export default function BiometricMatcher({ result, onUpdateBiometrics }: Props) 
             />
             <div
               className={`absolute bottom-1 right-1 w-3.5 h-3.5 rounded-full border-2 border-white dark:border-slate-900 ${
-                biometricDetails.faceMatched ? 'bg-emerald-500' : 'bg-rose-500'
+                biometricDetails.similarityScore === 0
+                  ? 'bg-amber-400'
+                  : biometricDetails.faceMatched
+                  ? 'bg-emerald-500'
+                  : 'bg-rose-500'
               }`}
             />
           </div>
@@ -314,7 +347,11 @@ export default function BiometricMatcher({ result, onUpdateBiometrics }: Props) 
             <span>Live Passenger</span>
             <span
               className={`w-1.5 h-1.5 rounded-full ${
-                biometricDetails.faceMatched ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'
+                biometricDetails.similarityScore === 0
+                  ? 'bg-amber-400'
+                  : biometricDetails.faceMatched
+                  ? 'bg-emerald-500 animate-pulse'
+                  : 'bg-rose-500'
               }`}
             />
           </span>

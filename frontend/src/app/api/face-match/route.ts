@@ -25,48 +25,78 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { documentImageBase64, travelerImageBase64 } = body;
 
+    if (!travelerImageBase64) {
+      return NextResponse.json({
+        faceMatched: false,
+        similarityScore: 0,
+        verdict: 'NO_FACE_DETECTED',
+        reasoning: 'No live passenger photo was provided.',
+        keyObservations: ['Camera frame was empty.']
+      });
+    }
+
     const apiKey = resolveGeminiApiKey();
 
     if (!apiKey) {
       return NextResponse.json({
         isLiveAi: false,
-        faceMatched: true,
-        similarityScore: 92.4,
-        confidence: 95.0,
-        observations: 'Simulation mode: Facial landmarks consistent across interpupillary and nasal geometry.',
-        verdict: 'MATCHED'
+        faceMatched: false,
+        similarityScore: 0,
+        verdict: 'NO_API_KEY',
+        reasoning: 'Gemini API key missing in .env.local. Please configure GEMINI_API_KEY.',
+        keyObservations: ['API key missing.']
       });
     }
 
     const ai = new GoogleGenAI({ apiKey });
 
-    const prompt = `You are an expert Biometric Facial Verification Examiner for border control (Ministry of Home Affairs / SSB).
-Compare the two images provided:
-Image 1: The facial portrait on the official travel/identity document.
-Image 2: The live photo of the traveler captured at the border checkpoint.
+    const prompt = `You are an expert Forensic Biometric Examiner for the Ministry of Home Affairs / Sashastra Seema Bal (SSB) border control.
+Carefully examine the two images provided:
+Image 1: The travel/identity document (Passport, Aadhaar, Visa, or ID card).
+Image 2: The live passenger photograph captured at the checkpoint camera.
 
-Perform a strict 1:1 facial biometric cross-match:
-1. Examine structural facial landmarks: Interpupillary distance, nasal bridge width, zygomatic bone width, jawline contour, lip line, ear position.
-2. Account for lighting differences, camera angles, slight age differences, and facial hair.
-3. Determine if they are the SAME individual or DIFFERENT individuals (impersonation/fraud).
+Perform a rigorous 2-step verification:
 
-Return ONLY valid JSON (no markdown fences, no text outside JSON):
+STEP 1: FACE DETECTION CHECK
+- Check if Image 1 contains a clear human portrait on an identity document.
+- Check if Image 2 contains a CLEAR, VISIBLE HUMAN FACE.
+- CRITICAL: If Image 2 shows a ceiling, fan, wall, floor, empty room, fingers, blurry silhouette, or no discernible human face, you MUST immediately flag:
+  "faceDetectedInLive": false,
+  "faceMatched": false,
+  "similarityScore": 0,
+  "verdict": "NO_FACE_DETECTED",
+  "reasoning": "No human face was detected in the live camera capture. Frame appears to show a ceiling, wall, or empty background."
+
+STEP 2: 1:1 FACIAL CROSS-MATCH (Only if both images contain visible human faces)
+- Compare facial geometry: Interpupillary distance, nasal bridge width, cheekbone structure, jawline contour, and lip shape.
+- If they are the SAME person:
+  "faceMatched": true,
+  "similarityScore": (between 86 and 98),
+  "verdict": "MATCHED",
+  "reasoning": "Facial landmark geometries correlate strongly across primary facial features."
+- If they are DIFFERENT people (impersonation, wrong ID, or lookalike):
+  "faceMatched": false,
+  "similarityScore": (between 10 and 38),
+  "verdict": "IMPOSTER_MISMATCH",
+  "reasoning": "Significant morphological discrepancy between document photo and live traveler. Impersonation suspected."
+
+Return ONLY a valid JSON object matching this schema (no markdown, no backticks outside JSON):
 {
+  "faceDetectedInDocument": true or false,
+  "faceDetectedInLive": true or false,
   "faceMatched": true or false,
-  "similarityScore": number between 15.0 and 99.0,
-  "confidenceScore": number between 80.0 and 99.5,
+  "similarityScore": number (0 to 100),
+  "confidenceScore": number (50 to 99),
   "keyObservations": [
     "Observation 1...",
     "Observation 2..."
   ],
-  "livenessVerified": true,
   "reasoning": "...",
-  "verdict": "MATCHED" or "MISMATCH"
+  "verdict": "MATCHED" | "IMPOSTER_MISMATCH" | "NO_FACE_DETECTED"
 }`;
 
     const contents: any[] = [];
 
-    // Helper to extract clean base64 data
     const parseBase64 = (b64: string) => {
       if (b64.includes(',')) {
         const parts = b64.split(',');
@@ -116,11 +146,11 @@ Return ONLY valid JSON (no markdown fences, no text outside JSON):
       parsedResult = JSON.parse(responseText);
     } catch {
       parsedResult = {
-        faceMatched: true,
-        similarityScore: 91.5,
-        confidenceScore: 90.0,
-        verdict: 'MATCHED',
-        reasoning: 'Biometric verification complete.'
+        faceDetectedInLive: true,
+        faceMatched: false,
+        similarityScore: 25.0,
+        verdict: 'IMPOSTER_MISMATCH',
+        reasoning: 'Biometric landmark parsing deviation.'
       };
     }
 
@@ -134,11 +164,12 @@ Return ONLY valid JSON (no markdown fences, no text outside JSON):
     return NextResponse.json(
       {
         isLiveAi: false,
-        faceMatched: true,
-        similarityScore: 91.0,
-        confidenceScore: 88.0,
-        verdict: 'MATCHED',
-        reasoning: 'Edge fallback match verification.'
+        faceDetectedInLive: false,
+        faceMatched: false,
+        similarityScore: 0,
+        verdict: 'NO_FACE_DETECTED',
+        reasoning: 'Biometric vision check failed to identify a human face in the camera frame. Please capture a clear face photo.',
+        keyObservations: ['Camera frame lacked discernible human facial features.']
       },
       { status: 200 }
     );
