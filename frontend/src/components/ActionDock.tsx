@@ -19,6 +19,10 @@ export default function ActionDock({ result, onResetTerminal }: Props) {
   };
 
   const handleExportPdf = () => {
+    if (result.isTerminalBlank) {
+      alert('Terminal is in blank standby state. Ingest traveler credentials before exporting dossier.');
+      return;
+    }
     generateOfficialDossierPdf(result);
   };
 
@@ -61,7 +65,11 @@ export default function ActionDock({ result, onResetTerminal }: Props) {
 
           {/* Row 2: Full-Width Prominent Primary Action */}
           <div>
-            {result.verdict === 'DETAIN' ? (
+            {result.isTerminalBlank ? (
+              <div className="w-full py-2.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-400 border border-slate-200 flex items-center justify-center gap-2 select-none">
+                <span>STANDBY: AWAITING PASSENGER SCAN</span>
+              </div>
+            ) : result.verdict === 'DETAIN' ? (
               <button
                 onClick={() => alert('CRITICAL ALERT: Detention protocol engaged. Outpost turnstiles locked.')}
                 className="w-full py-2.5 rounded-lg text-xs font-black bg-rose-700 hover:bg-rose-800 active:bg-rose-900 text-white shadow-sm flex items-center justify-center gap-2 transition animate-pulse cursor-pointer"
@@ -129,7 +137,11 @@ export default function ActionDock({ result, onResetTerminal }: Props) {
               <span>Secondary Review</span>
             </button>
 
-            {result.verdict === 'DETAIN' ? (
+            {result.isTerminalBlank ? (
+              <div className="px-4 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-400 border border-slate-200 flex items-center gap-1.5 shrink-0 select-none">
+                <span>STANDBY: AWAITING PASSENGER SCAN</span>
+              </div>
+            ) : result.verdict === 'DETAIN' ? (
               <button
                 onClick={() => alert('CRITICAL ALERT: Detention protocol engaged. Outpost turnstiles locked.')}
                 className="px-4 py-2 rounded-lg text-xs font-black bg-rose-700 hover:bg-rose-800 text-white shadow-sm flex items-center gap-1.5 transition animate-pulse cursor-pointer shrink-0"

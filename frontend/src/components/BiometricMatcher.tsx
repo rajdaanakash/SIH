@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { VerificationResult, BiometricMatchResult } from '../lib/types';
 import { compressAndResizeImage, ensureJpegBase64 } from '../lib/imageUtils';
-import { Camera, RefreshCw, Sparkles, CheckCircle2, XCircle, FlipHorizontal, Upload, X, AlertTriangle, AlertCircle } from 'lucide-react';
+import { Camera, RefreshCw, Sparkles, CheckCircle2, XCircle, FlipHorizontal, Upload, X, AlertTriangle, AlertCircle, User } from 'lucide-react';
 
 interface Props {
   result: VerificationResult;
@@ -283,12 +283,16 @@ export default function BiometricMatcher({ result, onUpdateBiometrics }: Props) 
       <div className="flex items-center justify-around gap-2 p-3.5 bg-slate-50 rounded-xl border border-slate-200">
         {/* Document Portrait */}
         <div className="flex flex-col items-center">
-          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-2 border-slate-300 shadow-xs bg-white flex items-center justify-center">
-            <img
-              src={result.documentFaceUrl}
-              alt="Doc Photo"
-              className="w-full h-full object-cover"
-            />
+          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-2 border-slate-300 shadow-xs bg-slate-100 flex items-center justify-center">
+            {result.documentFaceUrl ? (
+              <img
+                src={result.documentFaceUrl}
+                alt="Doc Photo"
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <User className="w-10 h-10 text-slate-400" />
+            )}
           </div>
           <span className="text-[10px] font-bold text-slate-600 mt-1.5 uppercase">
             Document Photo
@@ -332,7 +336,7 @@ export default function BiometricMatcher({ result, onUpdateBiometrics }: Props) 
         {/* Live Passenger Photo */}
         <div className="flex flex-col items-center">
           <div
-            className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-2 shadow-xs bg-white flex items-center justify-center relative ${
+            className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-2 shadow-xs bg-slate-100 flex items-center justify-center relative ${
               biometricDetails.similarityScore === 0
                 ? 'border-amber-400'
                 : biometricDetails.faceMatched
@@ -340,20 +344,26 @@ export default function BiometricMatcher({ result, onUpdateBiometrics }: Props) 
                 : 'border-rose-600 ring-2 ring-rose-200'
             }`}
           >
-            <img
-              src={result.liveTravelerPhotoUrl}
-              alt="Live Traveler"
-              className="w-full h-full object-cover"
-            />
-            <div
-              className={`absolute bottom-1 right-1 w-3.5 h-3.5 rounded-full border-2 border-white ${
-                biometricDetails.similarityScore === 0
-                  ? 'bg-amber-500'
-                  : biometricDetails.faceMatched
-                  ? 'bg-emerald-600'
-                  : 'bg-rose-600'
-              }`}
-            />
+            {result.liveTravelerPhotoUrl ? (
+              <img
+                src={result.liveTravelerPhotoUrl}
+                alt="Live Traveler"
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <Camera className="w-8 h-8 text-slate-400" />
+            )}
+            {result.liveTravelerPhotoUrl && (
+              <div
+                className={`absolute bottom-1 right-1 w-3.5 h-3.5 rounded-full border-2 border-white ${
+                  biometricDetails.similarityScore === 0
+                    ? 'bg-amber-500'
+                    : biometricDetails.faceMatched
+                    ? 'bg-emerald-600'
+                    : 'bg-rose-600'
+                }`}
+              />
+            )}
           </div>
           <span className="text-[10px] font-bold text-slate-600 mt-1.5 uppercase flex items-center gap-1">
             <span>Live Passenger</span>

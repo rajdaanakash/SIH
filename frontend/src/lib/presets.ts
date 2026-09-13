@@ -264,10 +264,31 @@ export const SCENARIO_PRESETS: ScenarioPreset[] = [
       riskScore: 54,
       riskLevel: 'MEDIUM',
       verdict: 'SECONDARY_INSPECTION',
-      executiveSummary: 'FLAGGED: Suspicious border immigration stamp. Circular geometry distortion and non-standard ink spectrum. Officer secondary review advised.',
-      documentImageUrl: '/samples/visa_forged_stamp.svg',
+      executiveSummary: 'FLAGGED: Suspicious border immigration stamp on Visa. Circular geometry distortion and non-standard ink spectrum. Officer secondary review advised.',
+      documentImageUrl: '/samples/passport_clean.svg',
       documentFaceUrl: '/samples/face_tenzin.svg',
       liveTravelerPhotoUrl: '/samples/face_tenzin.svg',
+      hasVisa: true,
+      visaImageUrl: '/samples/visa_forged_stamp.svg',
+      visaDetails: {
+        visaNumber: 'NPL-V-9028114',
+        passportNumberLinked: 'V9028114',
+        visaType: 'BORDER TRANSIT PERMIT',
+        stayDurationDays: 30,
+        entryValidity: 'MULTIPLE',
+        validFrom: '12/07/2026',
+        validUntil: '11/07/2027',
+        issuingPost: 'CONSULAR POST BIRGUNJ',
+        passportMatched: true,
+        nameMatched: true,
+        nationalityMatched: true,
+        validityAligned: true,
+        overallCrossCheckPassed: true,
+        crossCheckNotes: [
+          'Traveler credentials match between Passport and Visa Permit.',
+          'WARNING: Visa endorsement stamp displays physical distortion / circularity anomaly.'
+        ]
+      }
     },
   },
 ];

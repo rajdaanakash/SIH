@@ -119,6 +119,42 @@ export default function VerificationChecklist({ result }: Props) {
             Document photo vs. live camera comparison. Liveness test: <strong className="text-slate-800">{biometricDetails.livenessVerified ? 'PASSED (Anti-Spoof)' : 'FAILED'}</strong>.
           </p>
         </div>
+
+        {/* Module 5: Visa & IVFRT Cross-Reconciliation (Displayed when Visa is present) */}
+        {result.hasVisa && result.visaDetails && (
+          <div className={`p-3 rounded-lg border sm:col-span-2 ${
+            result.visaDetails.overallCrossCheckPassed !== false
+              ? 'bg-emerald-50/50 border-emerald-200'
+              : 'bg-rose-50/50 border-rose-200'
+          }`}>
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-1.5">
+                <Shield className="w-3.5 h-3.5 text-blue-700" />
+                <span className="font-bold text-xs text-slate-800">Module 5: Visa & IVFRT Cross-Reconciliation</span>
+              </div>
+              <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded border ${
+                result.visaDetails.overallCrossCheckPassed !== false
+                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                  : 'bg-rose-100 text-rose-800 border-rose-300'
+              }`}>
+                {result.visaDetails.overallCrossCheckPassed !== false ? (
+                  <>
+                    <CheckCircle2 className="w-3 h-3" />
+                    <span>IVFRT Verified</span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="w-3 h-3" />
+                    <span>Mismatch Flagged</span>
+                  </>
+                )}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-600 leading-snug">
+              Visa #{result.visaDetails.visaNumber || 'N/A'} linked to Passport #{result.visaDetails.passportNumberLinked || result.extractedFields.documentNumber}. {result.visaDetails.crossCheckNotes?.[0] || 'Credentials cross-checked with Central IVFRT immigration node.'}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

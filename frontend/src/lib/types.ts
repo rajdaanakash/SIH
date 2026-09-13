@@ -55,6 +55,23 @@ export interface BiometricMatchResult {
   liveFeedAvailable: boolean;
 }
 
+export interface VisaVerificationDetails {
+  visaNumber?: string;
+  passportNumberLinked?: string;
+  visaType?: string;
+  stayDurationDays?: number;
+  entryValidity?: string;
+  validFrom?: string;
+  validUntil?: string;
+  issuingPost?: string;
+  passportMatched?: boolean;
+  nameMatched?: boolean;
+  nationalityMatched?: boolean;
+  validityAligned?: boolean;
+  overallCrossCheckPassed?: boolean;
+  crossCheckNotes?: string[];
+}
+
 export interface VerificationResult {
   id: string;
   timestamp: string;
@@ -73,6 +90,11 @@ export interface VerificationResult {
   documentImageUrl: string;
   documentFaceUrl: string;
   liveTravelerPhotoUrl: string;
+  isTerminalBlank?: boolean;
+  hasVisa?: boolean;
+  visaImageUrl?: string;
+  visaDetails?: VisaVerificationDetails;
+  aiAuditData?: any;
 }
 
 export interface ScenarioPreset {

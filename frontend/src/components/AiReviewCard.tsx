@@ -15,6 +15,8 @@ export default function AiReviewCard({ result, onApplyAiResult }: Props) {
   const [aiAnalysis, setAiAnalysis] = useState<any>(null);
   const [isLiveAi, setIsLiveAi] = useState<boolean | null>(null);
 
+  const activeAnalysis = aiAnalysis || result.aiAuditData;
+
   const handleRunAiAudit = async () => {
     setLoading(true);
     setAiAnalysis(null);
@@ -39,11 +41,29 @@ export default function AiReviewCard({ result, onApplyAiResult }: Props) {
       // Ensure base64 is compressed to lightweight JPEG payload
       imageBase64 = await ensureJpegBase64(imageBase64);
 
+      let visaBase64: string | undefined = undefined;
+      if (result.visaImageUrl) {
+        let vUrl = result.visaImageUrl;
+        if (vUrl.startsWith('/samples/')) {
+          try {
+            const resp = await fetch(vUrl);
+            const blob = await resp.blob();
+            vUrl = await new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.readAsDataURL(blob);
+            });
+          } catch (e) {}
+        }
+        visaBase64 = await ensureJpegBase64(vUrl);
+      }
+
       const res = await fetch('/api/ai-review', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           imageBase64: imageBase64,
+          visaImageBase64: visaBase64,
           documentType: result.documentType,
           currentFields: result.extractedFields,
         }),
@@ -125,21 +145,21 @@ export default function AiReviewCard({ result, onApplyAiResult }: Props) {
         </button>
       </div>
 
-      {aiAnalysis ? (
+      {activeAnalysis ? (
         <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-2.5 text-xs">
           <div className="flex items-center justify-between border-b border-slate-200 pb-2">
             <div className="flex items-center gap-2">
               <span className="font-bold text-slate-900">AI Forensic Verdict:</span>
               <span
                 className={`font-black px-2.5 py-0.5 rounded border text-[10px] ${
-                  aiAnalysis.recommendedAction === 'CLEAR'
+                  activeAnalysis.recommendedAction === 'CLEAR'
                     ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                    : aiAnalysis.recommendedAction === 'DETAIN'
+                    : activeAnalysis.recommendedAction === 'DETAIN'
                     ? 'bg-rose-50 text-rose-800 border-rose-300'
                     : 'bg-amber-50 text-amber-800 border-amber-300'
                 }`}
               >
-                {aiAnalysis.recommendedAction || 'CLEAR'}
+                {activeAnalysis.recommendedAction || 'CLEAR'}
               </span>
               {isLiveAi && (
                 <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 font-semibold border border-emerald-300">
@@ -148,7 +168,7 @@ export default function AiReviewCard({ result, onApplyAiResult }: Props) {
               )}
             </div>
             <div className="text-[11px] font-mono text-slate-700">
-              Confidence: <strong className="text-slate-900">{aiAnalysis.aiConfidenceScore || 96.5}%</strong>
+              Confidence: <strong className="text-slate-900">{activeAnalysis.aiConfidenceScore || 96.5}%</strong>
             </div>
           </div>
 
@@ -157,7 +177,7 @@ export default function AiReviewCard({ result, onApplyAiResult }: Props) {
               Forensic Vision Observations:
             </div>
             <ul className="space-y-1">
-              {(aiAnalysis.forensicObservations || [
+              {(activeAnalysis.forensicObservations || [
                 'Micro-print line integrity across bio-page verified.',
                 'Font kerning and numerical baseline alignment consistent.',
                 'Substrate reflection shows authentic laminate security pattern.'
@@ -170,10 +190,10 @@ export default function AiReviewCard({ result, onApplyAiResult }: Props) {
             </ul>
           </div>
 
-          {aiAnalysis.reasoning && (
+          {activeAnalysis.reasoning && (
             <div className="pt-2 border-t border-slate-200 text-[11px] text-slate-600">
               <strong className="text-slate-800">Executive Summary: </strong>
-              {aiAnalysis.reasoning}
+              {activeAnalysis.reasoning}
             </div>
           )}
         </div>
@@ -182,7 +202,9 @@ export default function AiReviewCard({ result, onApplyAiResult }: Props) {
           <div className="flex items-center gap-2">
             <Cpu className="w-4 h-4 text-[#0A2540] shrink-0" />
             <span>
-              Click <strong className="text-slate-900">&quot;Run Live AI Audit&quot;</strong> to execute deep multimodal reasoning on the document specimen.
+              {result.isTerminalBlank
+                ? 'Terminal Ready: Multimodal AI audit will execute automatically upon Passport & Visa ingestion.'
+                : 'Click "Run Live AI Audit" to execute deep multimodal reasoning on the document specimen.'}
             </span>
           </div>
         </div>

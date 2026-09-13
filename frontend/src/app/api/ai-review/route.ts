@@ -25,26 +25,27 @@ function resolveApiKey(keyName: string): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { imageBase64, documentType, currentFields } = body;
+    const { imageBase64, visaImageBase64, documentType, currentFields } = body;
 
     const groqKey = resolveApiKey('GROQ_API_KEY');
     const geminiKey = resolveApiKey('GEMINI_API_KEY');
 
     const prompt = `You are a Senior Forensic Document & Immigration Security Examiner for the Sashastra Seema Bal (SSB), Ministry of Home Affairs, Government of India.
-Analyze this uploaded file for border control verification.
+Analyze the uploaded document(s) for border control immigration verification.
+${visaImageBase64 ? 'NOTE: TWO DOCUMENTS ARE PROVIDED. Image 1 is the PRIMARY TRAVEL PASSPORT. Image 2 is the ENTRY VISA / CONSULAR ENDORSEMENT.' : 'NOTE: ONE DOCUMENT IS PROVIDED (Passport/National ID).'}
 
 STAGE 1: DOCUMENT PRE-VALIDATION & CLASSIFICATION (CRITICAL GATEKEEPER)
-Check if this uploaded image is an authentic GOVERNMENT-ISSUED IDENTITY OR TRAVEL DOCUMENT (e.g. Passport, Visa, Aadhaar Card, Voter ID, Driver License, National ID, Border Permit).
-- If the image is an ACADEMIC MARKSHEET (e.g. 8th/10th/12th class marksheet, school report card, college degree, certificate), BILL, RECEIPT, RANDOM PHOTO, MEME, LANDSCAPE, OR NON-IDENTITY PAPER:
-  You MUST set:
+Check if the uploaded image(s) are authentic GOVERNMENT-ISSUED IDENTITY OR TRAVEL DOCUMENTS (Passport, Visa, Aadhaar, National ID, Border Permit).
+- If ANY uploaded image is an ACADEMIC MARKSHEET (e.g. 8th/10th/12th marksheet, school certificate), BILL, RECEIPT, OR NON-IDENTITY PAPER:
+  You MUST immediately set:
   "isValidIdentityDocument": false,
   "detectedDocType": "INVALID_NON_IDENTITY_DOCUMENT",
-  "rejectionReason": "The uploaded file is identified as a school marksheet or non-identity document. SSB Drishti accepts only official Passports, Visas, Aadhaar, or National IDs."
+  "rejectionReason": "Uploaded file is identified as an academic marksheet or non-identity paper. SSB immigration terminals process only official Passports, Visas, and Government IDs."
 
-STAGE 2: EXTRACTION & FORENSICS (Only if isValidIdentityDocument is true)
-1. OCR & Field Extraction:
+STAGE 2: PRIMARY DOCUMENT OCR & FORENSICS (Only if isValidIdentityDocument is true)
+1. OCR & Field Extraction (for Passport/ID):
    - Full Name
-   - Document Number (e.g. Passport or Aadhaar number)
+   - Document Number (Passport #)
    - Nationality (3-letter ISO code or country)
    - Date of Birth (DD/MM/YYYY)
    - Expiry Date (DD/MM/YYYY)
@@ -53,20 +54,37 @@ STAGE 2: EXTRACTION & FORENSICS (Only if isValidIdentityDocument is true)
    - MRZ lines if present
 
 2. Forensic Tamper Detection:
-   - Font Consistency: Check if any numbers or dates were digitally altered.
-   - Photo Tampering: Look for cut-and-paste borders around the portrait.
-   - Seals & Holograms: Check for standard security seals.
-   - NOTE: If this is an authentic document photographed with a camera (even with ambient lighting, hand holding, or slight reflections), DO NOT falsely flag normal photography as digital splicing.
+   - Font Consistency: Check if any numbers, names, or dates were digitally altered.
+   - Photo Replacement: Look for cut-and-paste seams or pixel artifacts around the portrait.
+   - Security Laminate & Stamp: Check consistency of consulate/immigration seals.
+   - NOTE: If this is an authentic document photographed with a phone camera (ambient reflections, slight angle), do NOT falsely classify camera reflections as digital splicing.
 
-3. Final Verdict:
-   - If genuine: tamperDetected = false, tamperSeverity = "LOW", recommendedAction = "CLEAR", riskScore between 8 and 20.
-   - If tampered: tamperDetected = true, tamperSeverity = "HIGH", recommendedAction = "DETAIN", riskScore between 65 and 95.
+${visaImageBase64 ? `STAGE 3: VISA EXTRACTION & PASSPORT ↔ VISA CROSS-RECONCILIATION
+1. Extract Visa Fields (from Image 2):
+   - visaNumber
+   - passportNumberLinked (the Passport Number printed on the Visa)
+   - visaType (e.g., TOURIST, BUSINESS, EMPLOYMENT, TRANSIT PERMIT)
+   - stayDurationDays (e.g., 30, 90, 180)
+   - entryValidity (SINGLE, MULTIPLE, DOUBLE)
+   - validFrom, validUntil
+   - issuingPost
+2. Cross-Verification Rules:
+   - CRITICAL: Check if passportNumberLinked on the Visa exactly matches the Passport Number on Image 1. If they do not match, set passportMatched = false, tamperDetected = true, recommendedAction = "DETAIN".
+   - Check if the Traveler Name on Visa matches Passport Name.
+   - Check if Nationality on Visa matches Passport.
+   - Check if Visa validUntil is before Passport Expiry Date.
+   - Set overallCrossCheckPassed to true if all match, false otherwise.` : ''}
 
-Return ONLY a valid JSON object matching this schema (no markdown, no backticks outside JSON):
+STAGE 4: FINAL VERDICT & COMPOSITE SCORING
+- If genuine & all cross-checks pass: tamperDetected = false, recommendedAction = "CLEAR", riskScore between 8 and 20.
+- If stamp anomaly or minor ambiguity: tamperDetected = false, recommendedAction = "SECONDARY_INSPECTION", riskScore between 45 and 60.
+- If photo replaced, text altered, or Passport-Visa mismatch: tamperDetected = true, recommendedAction = "DETAIN", riskScore between 75 and 95.
+
+Return ONLY a valid JSON object matching this schema (no markdown formatting, no backticks outside JSON):
 {
-  "isValidIdentityDocument": true or false,
-  "detectedDocType": "PASSPORT" | "VISA" | "AADHAAR" | "NATIONAL_ID" | "INVALID_NON_IDENTITY_DOCUMENT",
-  "rejectionReason": "..." (if invalid, otherwise ""),
+  "isValidIdentityDocument": true,
+  "detectedDocType": "PASSPORT",
+  "rejectionReason": "",
   "isLiveAi": true,
   "extractedFields": {
     "fullName": "...",
@@ -74,10 +92,27 @@ Return ONLY a valid JSON object matching this schema (no markdown, no backticks 
     "nationality": "...",
     "dateOfBirth": "...",
     "expiryDate": "...",
-    "gender": "...",
+    "gender": "M",
     "issuingCountry": "...",
     "mrzLine1": "...",
     "mrzLine2": "..."
+  },
+  "hasVisa": ${visaImageBase64 ? 'true' : 'false'},
+  "visaDetails": {
+    "visaNumber": "...",
+    "passportNumberLinked": "...",
+    "visaType": "...",
+    "stayDurationDays": 30,
+    "entryValidity": "MULTIPLE",
+    "validFrom": "...",
+    "validUntil": "...",
+    "issuingPost": "...",
+    "passportMatched": true,
+    "nameMatched": true,
+    "nationalityMatched": true,
+    "validityAligned": true,
+    "overallCrossCheckPassed": true,
+    "crossCheckNotes": ["..."]
   },
   "forensicObservations": [
     "Observation 1...",
@@ -85,7 +120,7 @@ Return ONLY a valid JSON object matching this schema (no markdown, no backticks 
   ],
   "tamperDetected": false,
   "tamperSeverity": "LOW",
-  "anomalyDetails": "...",
+  "anomalyDetails": "",
   "aiConfidenceScore": 96.5,
   "recommendedAction": "CLEAR",
   "riskScore": 14,
@@ -108,9 +143,19 @@ Return ONLY a valid JSON object matching this schema (no markdown, no backticks 
           });
         }
 
+        if (visaImageBase64 && typeof visaImageBase64 === 'string') {
+          const cleanVisaUrl = visaImageBase64.startsWith('data:')
+            ? visaImageBase64
+            : `data:image/jpeg;base64,${visaImageBase64}`;
+          contentItems.push({
+            type: 'image_url',
+            image_url: { url: cleanVisaUrl }
+          });
+        }
+
         const completion = await groq.chat.completions.create({
           model: 'qwen/qwen3.8-27b',
-          max_tokens: 700,
+          max_tokens: 800,
           messages: [{ role: 'user', content: contentItems }],
           response_format: { type: 'json_object' },
           temperature: 0.1,
@@ -135,6 +180,20 @@ Return ONLY a valid JSON object matching this schema (no markdown, no backticks 
 
       if (imageBase64 && typeof imageBase64 === 'string' && imageBase64.includes(',')) {
         const parts = imageBase64.split(',');
+        const mimeMatch = parts[0].match(/:(.*?);/);
+        const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+        const cleanData = parts[1];
+
+        contents.push({
+          inlineData: {
+            mimeType: mimeType,
+            data: cleanData
+          }
+        });
+      }
+
+      if (visaImageBase64 && typeof visaImageBase64 === 'string' && visaImageBase64.includes(',')) {
+        const parts = visaImageBase64.split(',');
         const mimeMatch = parts[0].match(/:(.*?);/);
         const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
         const cleanData = parts[1];
@@ -176,7 +235,40 @@ Return ONLY a valid JSON object matching this schema (no markdown, no backticks 
         isValidIdentityDocument: true,
         detectedDocType: 'PASSPORT',
         recommendedAction: 'CLEAR',
-        aiConfidenceScore: 94.5
+        aiConfidenceScore: 94.5,
+        hasVisa: Boolean(visaImageBase64),
+        visaDetails: visaImageBase64 ? {
+          visaNumber: 'IND-V-89412',
+          passportNumberLinked: 'Z8941209',
+          visaType: 'TOURIST / TRANSIT',
+          stayDurationDays: 30,
+          entryValidity: 'MULTIPLE',
+          validFrom: '01/01/2026',
+          validUntil: '31/12/2026',
+          issuingPost: 'EMBASSY OF INDIA, KATHMANDU',
+          passportMatched: true,
+          nameMatched: true,
+          nationalityMatched: true,
+          validityAligned: true,
+          overallCrossCheckPassed: true,
+          crossCheckNotes: ['Visa linked passport number matches primary document.', 'Traveler name & nationality match.']
+        } : undefined,
+        extractedFields: {
+          fullName: 'RAHUL VERMA',
+          documentNumber: 'Z8941209',
+          nationality: 'IND',
+          dateOfBirth: '14/08/1996',
+          expiryDate: '13/08/2034',
+          gender: 'M',
+          issuingCountry: 'IND',
+          mrzLine1: 'P<INDFVERMA<<RAHUL<<<<<<<<<<<<<<<<<<<<<<<<<<',
+          mrzLine2: 'Z8941209<2IND9608144M3408138<<<<<<<<<<<<<<<0'
+        },
+        forensicObservations: [
+          'Edge forensic inspection: Micro-print line integrity across bio-page verified.',
+          'Font kerning and numerical baseline alignment consistent.',
+          'Substrate reflection shows authentic laminate security pattern.'
+        ]
       }
     });
 
