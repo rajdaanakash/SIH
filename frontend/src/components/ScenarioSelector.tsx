@@ -92,9 +92,12 @@ export default function ScenarioSelector({
 
   // Card 1: Document & Citizenship Integrity
   const card1IsWrongType = !isTerminalBlank && currentResult.isWrongDocumentType;
-  const card1IsClear = !isTerminalBlank && (isIndianNational || !tamperDetails.photoReplacementDetected) && !card1IsWrongType;
+  const card1IsDummy = !isTerminalBlank && currentResult.isDummySpecimen;
+  const card1IsClear = !isTerminalBlank && (isIndianNational || !tamperDetails.photoReplacementDetected) && !card1IsWrongType && !card1IsDummy;
   const card1Title = isTerminalBlank 
     ? 'Valid Indian Passport' 
+    : card1IsDummy
+    ? 'Dummy Specimen Template'
     : card1IsWrongType
     ? 'Visa Sticker in Passport Slot'
     : isIndianNational 
@@ -102,6 +105,8 @@ export default function ScenarioSelector({
     : `Foreign Passport (${extractedFields.nationality || 'INTL'})`;
   const card1Badge = isTerminalBlank 
     ? 'READY' 
+    : card1IsDummy
+    ? 'DETAIN'
     : card1IsWrongType
     ? 'DETAIN'
     : isIndianNational 
@@ -109,6 +114,8 @@ export default function ScenarioSelector({
     : 'FOREIGN ID';
   const card1Subtitle = isTerminalBlank 
     ? 'Awaiting Document Scan' 
+    : card1IsDummy
+    ? `FRAUD (Dummy Specimen ${extractedFields.documentNumber || 'A1234567'})`
     : card1IsWrongType
     ? 'INVALID (Passport Booklet Required)'
     : isIndianNational 
@@ -116,12 +123,18 @@ export default function ScenarioSelector({
     : `FOREIGN NATIONAL (${extractedFields.nationality || 'INTL'})`;
 
   // Card 2: Text & Expiry Date Integrity
-  const card2IsExpired = !isTerminalBlank && (currentResult.isExpired || !icaoDetails.expiryValid);
-  const card2IsForged = !isTerminalBlank && (tamperDetails.textManipulationDetected || card2IsExpired);
+  const card2IsExpired = !isTerminalBlank && currentResult.isExpired;
+  const card2IsIcaoFailed = !isTerminalBlank && (currentResult.icaoChecksumFailed || !icaoDetails.overallIcaoCompliant);
+  const card2IsVizMismatch = !isTerminalBlank && currentResult.vizMrzMismatch;
+  const card2IsForged = !isTerminalBlank && (tamperDetails.textManipulationDetected || card2IsExpired || card2IsIcaoFailed || card2IsVizMismatch);
   const card2Title = isTerminalBlank
     ? 'Text & Expiry Integrity'
-    : currentResult.isExpired
+    : card2IsExpired
     ? 'Document Expired'
+    : card2IsIcaoFailed
+    ? 'ICAO Checksum Forgery'
+    : card2IsVizMismatch
+    ? 'VIZ vs MRZ Contradiction'
     : card2IsForged 
     ? 'Text-Forged Expiry Date' 
     : 'Text & Expiry Integrity';
@@ -132,8 +145,12 @@ export default function ScenarioSelector({
     : 'CLEAR';
   const card2Subtitle = isTerminalBlank 
     ? 'OCR & Checksum Engine' 
-    : currentResult.isExpired
+    : card2IsExpired
     ? `EXPIRED (${extractedFields.expiryDate || 'Past Date'})`
+    : card2IsIcaoFailed
+    ? 'FORGERY (ICAO Checksum Fail)'
+    : card2IsVizMismatch
+    ? 'DATA CONTRADICTION (DOB Differ)'
     : card2IsForged 
     ? 'FORGERY (Checksum Fail)' 
     : 'AUTHENTIC (Checksums Passed)';

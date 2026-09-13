@@ -76,6 +76,19 @@ RULE 4: CONSULAR JURISDICTION (INDIAN BORDER CLEARANCE)
   "riskScore": 96,
   "reasoning": "JURISDICTION VIOLATION: Uploaded Visa is a foreign visa (UNITED STATES OF AMERICA). Entering India requires an authentic Indian Entry Visa / e-Visa issued by the Government of India."
 
+RULE 5: DUMMY / SPECIMEN / TEST TEMPLATE DETECTION & ICAO CHECK DIGIT FRAUD
+- Check if the document matches known internet sample / dummy mock-up templates:
+  * Name: "ARJUN KUMAR", Document Number: "A1234567", or sequential numbers "1234567".
+  * VIZ vs MRZ discrepancies: Check if VIZ Date of Birth (e.g. 15/02/1985) contradicts MRZ Date of Birth (e.g. 850715 = 15 July 1985).
+  * ICAO 9303 checksums: Check if Doc #, DOB, or Expiry check-digits fail modulus-10 verification.
+- If ANY dummy template, sequential placeholder number, VIZ-MRZ date mismatch, or ICAO checksum failure is detected:
+  You MUST set:
+  "isDummySpecimen": true,
+  "tamperDetected": true,
+  "recommendedAction": "DETAIN",
+  "riskScore": 99,
+  "reasoning": "CRITICAL FRAUD: Document identified as an unauthenticated dummy/specimen template (A1234567 / ARJUN KUMAR). ICAO 9303 checksums failed and VIZ-MRZ date discrepancies detected. Traveler must be detained immediately."
+
 STAGE 1: DOCUMENT PRE-VALIDATION & CLASSIFICATION
 Check if the uploaded image(s) are authentic GOVERNMENT-ISSUED IDENTITY OR TRAVEL DOCUMENTS.
 - If ANY uploaded image is an ACADEMIC MARKSHEET, BILL, RECEIPT, OR NON-IDENTITY PAPER:
@@ -92,7 +105,7 @@ STAGE 3: NATIONALITY-BASED VISA RULES & CROSS-RECONCILIATION
   * Cross-check passportNumberLinked on the Visa with the Passport Number on Image 1. If mismatch -> recommendedAction = "DETAIN".
 
 STAGE 4: FINAL VERDICT & COMPOSITE SCORING
-- If isDuplicate OR isExpired OR isWrongDocType OR isInvalidJurisdiction: recommendedAction = "DETAIN", riskScore >= 95.
+- If isDuplicate OR isExpired OR isWrongDocType OR isInvalidJurisdiction OR isDummySpecimen: recommendedAction = "DETAIN", riskScore >= 95.
 - If genuine Indian passport OR genuine foreign passport with valid, matching, unexpired Indian Visa: recommendedAction = "CLEAR", riskScore between 8 and 20.
 - If foreign passport without visa: recommendedAction = "SECONDARY_INSPECTION", riskScore 48.
 
@@ -104,6 +117,7 @@ Return ONLY a valid JSON object matching this schema:
   "isExpired": false,
   "isWrongDocType": false,
   "isInvalidJurisdiction": false,
+  "isDummySpecimen": false,
   "rejectionReason": "",
   "isLiveAi": true,
   "extractedFields": {

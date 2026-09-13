@@ -102,6 +102,9 @@ export interface VerificationResult {
   isDuplicateDocument?: boolean;
   isWrongDocumentType?: boolean;
   isInvalidJurisdiction?: boolean;
+  isDummySpecimen?: boolean;
+  vizMrzMismatch?: boolean;
+  icaoChecksumFailed?: boolean;
   securityAlertMessages?: string[];
 }
 

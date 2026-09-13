@@ -159,6 +159,51 @@ export default function DocumentViewer({ result }: Props) {
         </div>
       )}
 
+      {result.isDummySpecimen && (
+        <div className="mb-3 p-3 rounded-xl bg-rose-50 border-2 border-rose-500 text-rose-900 flex items-start gap-2.5 animate-pulse">
+          <ShieldAlert className="w-5 h-5 text-rose-700 shrink-0 mt-0.5" />
+          <div>
+            <div className="text-xs font-black uppercase tracking-wider text-rose-800 flex items-center gap-1.5">
+              <span>CRITICAL FRAUD: DUMMY / SPECIMEN PASSPORT DETECTED</span>
+              <span className="px-1.5 py-0.2 rounded bg-rose-700 text-white text-[9px] font-bold">CRIMINAL FRAUD</span>
+            </div>
+            <div className="text-[11px] font-semibold text-rose-700 mt-0.5">
+              Document Number <strong className="underline font-mono">{extractedFields.documentNumber}</strong> / Name <strong className="underline">{extractedFields.fullName}</strong> is an unauthenticated internet sample mockup template. Fake/dummy documents presented at border control trigger immediate criminal detention under Section 12 of the Passports Act.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {result.icaoChecksumFailed && (
+        <div className="mb-3 p-3 rounded-xl bg-rose-50 border-2 border-rose-400 text-rose-900 flex items-start gap-2.5">
+          <AlertTriangle className="w-5 h-5 text-rose-700 shrink-0 mt-0.5" />
+          <div>
+            <div className="text-xs font-black uppercase tracking-wider text-rose-800 flex items-center gap-1.5">
+              <span>ICAO DOC 9303 CHECKSUM FRAUD: 7-3-1 CHECK DIGITS FAILED</span>
+              <span className="px-1.5 py-0.2 rounded bg-rose-700 text-white text-[9px] font-bold">CHECKSUM FAIL</span>
+            </div>
+            <div className="text-[11px] font-semibold text-rose-700 mt-0.5">
+              Mathematical check-digit calculation failed across MRZ Line 2. {result.icaoDetails.notes.slice(0, 2).join(' ')}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {result.vizMrzMismatch && (
+        <div className="mb-3 p-3 rounded-xl bg-amber-50 border-2 border-amber-400 text-amber-900 flex items-start gap-2.5">
+          <AlertTriangle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+          <div>
+            <div className="text-xs font-black uppercase tracking-wider text-amber-800 flex items-center gap-1.5">
+              <span>DATA CONTRADICTION: VIZ VS MRZ FIELD MISMATCH</span>
+              <span className="px-1.5 py-0.2 rounded bg-amber-700 text-white text-[9px] font-bold">DISCREPANCY</span>
+            </div>
+            <div className="text-[11px] font-semibold text-amber-800 mt-0.5">
+              Visual zone text directly contradicts machine-readable optical encoding (e.g. Visual DOB vs MRZ DOB mismatch).
+            </div>
+          </div>
+        </div>
+      )}
+
       {result.isInvalidJurisdiction && (
         <div className="mb-3 p-3 rounded-xl bg-rose-50 border-2 border-rose-400 text-rose-900 flex items-start gap-2.5">
           <AlertTriangle className="w-5 h-5 text-rose-700 shrink-0 mt-0.5" />

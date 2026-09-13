@@ -14,6 +14,7 @@ import { ScenarioPreset, VerificationResult } from '../lib/types';
 import { computeClientEla } from '../lib/elaEngine';
 import { compressAndResizeImage } from '../lib/imageUtils';
 import { checkDocumentExpiry, isDuplicateUpload } from '../lib/dateUtils';
+import { parseAndVerifyTd3Mrz, detectDummyOrSpecimen, checkVizMrzConsistency } from '../lib/icao9303';
 import { ShieldCheck, RefreshCw, Smartphone, AlertCircle, AlertOctagon, Sparkles, RotateCcw } from 'lucide-react';
 
 const BLANK_TERMINAL_RESULT: VerificationResult = {
@@ -305,8 +306,37 @@ export default function Home() {
         ))
       );
 
+      // e) Real ICAO Doc 9303 Checksum Calculation:
+      const line1 = extractedFields.mrzLine1 || '';
+      const line2 = extractedFields.mrzLine2 || '';
+      const icaoParsed = (line2 && line2.length >= 44)
+        ? parseAndVerifyTd3Mrz(line1, line2)
+        : null;
+
+      const icaoChecksumFailed = Boolean(icaoParsed && !icaoParsed.overallIcaoCompliant);
+
+      // f) Dummy / Specimen Template Detection (e.g. ARJUN KUMAR, A1234567, sequential test numbers):
+      const dummyCheck = detectDummyOrSpecimen(
+        extractedFields,
+        `${extractedFields.fullName} ${extractedFields.documentNumber} ${aiData?.reasoning || ''}`
+      );
+      const isDummySpecimen = dummyCheck.isDummy || (aiData?.isDummySpecimen === true);
+
+      // g) VIZ vs MRZ Textual & Date Discrepancy Detection:
+      const vizMrzCheck = checkVizMrzConsistency(extractedFields, line1, line2);
+      const vizMrzMismatch = vizMrzCheck.hasMismatch;
+
       // Collect deterministic security violation warnings:
       const securityViolations: string[] = [];
+      if (isDummySpecimen) {
+        securityViolations.push(`CRITICAL FRAUD: ${dummyCheck.reason || 'Document identified as an unauthenticated dummy/specimen template (A1234567 / ARJUN KUMAR).'}`);
+      }
+      if (icaoChecksumFailed && icaoParsed) {
+        securityViolations.push(`ICAO 9303 CHECKSUM FRAUD: ${icaoParsed.notes.join(' • ')}`);
+      }
+      if (vizMrzMismatch) {
+        securityViolations.push(`DATA INCONSISTENCY: ${vizMrzCheck.notes.join(' • ')}`);
+      }
       if (duplicateDetected) {
         securityViolations.push('CRITICAL FRAUD: The identical document was submitted for both the Passport and Visa slots.');
       }
@@ -366,12 +396,19 @@ export default function Home() {
         isExpired ||
         isVisaInPassportSlot ||
         isForeignVisaAtIndianBorder ||
+        isDummySpecimen ||
+        icaoChecksumFailed ||
+        vizMrzMismatch ||
         isTampered ||
         visaCrossCheckFailed;
 
       // Calculate composite Threat Risk Score
       let riskScore = 12;
-      if (duplicateDetected) {
+      if (isDummySpecimen) {
+        riskScore = 99;
+      } else if (icaoChecksumFailed) {
+        riskScore = 98;
+      } else if (duplicateDetected) {
         riskScore = 98;
       } else if (isPassportExpired || isVisaExpired) {
         riskScore = 96;
@@ -379,6 +416,8 @@ export default function Home() {
         riskScore = 95;
       } else if (isForeignVisaAtIndianBorder) {
         riskScore = 94;
+      } else if (vizMrzMismatch) {
+        riskScore = 92;
       } else if (isTampered) {
         riskScore = 88;
       } else if (visaCrossCheckFailed) {
@@ -400,6 +439,30 @@ export default function Home() {
 
       // Flagged regions for visual bounding box
       const flaggedRegions: any[] = [];
+      if (isDummySpecimen) {
+        flaggedRegions.push({
+          field: 'Dummy / Sample Specimen',
+          description: dummyCheck.reason || 'Unauthenticated internet sample template detected.',
+          severity: 'HIGH' as const,
+          box: { x: 10, y: 15, width: 80, height: 40 },
+        });
+      }
+      if (icaoChecksumFailed && icaoParsed) {
+        flaggedRegions.push({
+          field: 'ICAO Checksum Forgery',
+          description: icaoParsed.notes.join(' '),
+          severity: 'HIGH' as const,
+          box: { x: 5, y: 78, width: 90, height: 20 },
+        });
+      }
+      if (vizMrzMismatch) {
+        flaggedRegions.push({
+          field: 'VIZ vs MRZ Contradiction',
+          description: vizMrzCheck.notes.join(' '),
+          severity: 'HIGH' as const,
+          box: { x: 20, y: 35, width: 60, height: 25 },
+        });
+      }
       if (duplicateDetected) {
         flaggedRegions.push({
           field: 'Duplicate Ingestion',
@@ -452,18 +515,31 @@ export default function Home() {
         isDuplicateDocument: duplicateDetected,
         isWrongDocumentType: isVisaInPassportSlot,
         isInvalidJurisdiction: isForeignVisaAtIndianBorder,
+        isDummySpecimen,
+        vizMrzMismatch,
+        icaoChecksumFailed,
         securityAlertMessages: securityViolations,
         timestamp: new Date().toLocaleString('en-IN') + ' IST',
         tokenNumber: `SSB-2026-${Math.floor(10000 + Math.random() * 90000)}`,
         documentType: 'PASSPORT',
         extractedFields,
-        icaoDetails: {
-          documentNumberValid: !isTampered && !isTextForged && !isVisaInPassportSlot,
-          dobValid: true,
-          expiryValid: !isExpired && !isTampered && !isTextForged,
-          compositeValid: !isExpired && !isTampered && !isTextForged && !isVisaInPassportSlot,
+        icaoDetails: icaoParsed ? {
+          documentNumberValid: icaoParsed.documentNumberValid,
+          dobValid: icaoParsed.dobValid && !vizMrzMismatch,
+          expiryValid: icaoParsed.expiryValid && !isExpired,
+          compositeValid: icaoParsed.compositeValid,
           rawAlgorithm: 'ICAO Doc 9303 Part 3/7 (Modulus 10, 7-3-1 weights)',
-          overallIcaoCompliant: !isExpired && !isTampered && !isTextForged && !isVisaInPassportSlot,
+          overallIcaoCompliant: icaoParsed.overallIcaoCompliant && !isExpired && !isDummySpecimen && !vizMrzMismatch,
+          notes: icaoParsed.notes.length > 0
+            ? [...icaoParsed.notes, ...(vizMrzMismatch ? vizMrzCheck.notes : [])]
+            : ['All ICAO 9303 check digits mathematically verified.'],
+        } : {
+          documentNumberValid: !isTampered && !isTextForged && !isVisaInPassportSlot && !isDummySpecimen,
+          dobValid: !vizMrzMismatch,
+          expiryValid: !isExpired && !isTampered && !isTextForged,
+          compositeValid: !isExpired && !isTampered && !isTextForged && !isVisaInPassportSlot && !isDummySpecimen,
+          rawAlgorithm: 'ICAO Doc 9303 Part 3/7 (Modulus 10, 7-3-1 weights)',
+          overallIcaoCompliant: !isExpired && !isTampered && !isTextForged && !isVisaInPassportSlot && !isDummySpecimen && !vizMrzMismatch,
           notes: securityViolations.length > 0
             ? securityViolations
             : aiData?.forensicObservations && aiData.forensicObservations.length > 0
@@ -476,12 +552,12 @@ export default function Home() {
         tamperDetails: {
           photoReplacementDetected: isPhotoReplaced || (isTampered && !isTextForged),
           photoSeamConfidence: isTampered ? 0.88 : 0.03,
-          textManipulationDetected: isTextForged || (isTampered && !isPhotoReplaced),
-          fontInconsistencyScore: isTextForged ? 0.82 : 0.04,
+          textManipulationDetected: isTextForged || icaoChecksumFailed || vizMrzMismatch || (isTampered && !isPhotoReplaced),
+          fontInconsistencyScore: isTextForged || icaoChecksumFailed ? 0.88 : 0.04,
           stampForgeryDetected: false,
           stampCircularityAnomaly: 0.02,
           elaAnomalyScore: elaScore,
-          metadataTampered: isTampered || duplicateDetected,
+          metadataTampered: isTampered || duplicateDetected || isDummySpecimen || icaoChecksumFailed,
           flaggedRegions,
         },
         biometricDetails: {
@@ -724,6 +800,9 @@ export default function Home() {
         prev.isDuplicateDocument ||
         prev.isWrongDocumentType ||
         prev.isInvalidJurisdiction ||
+        prev.isDummySpecimen ||
+        prev.icaoChecksumFailed ||
+        prev.vizMrzMismatch ||
         prev.tamperDetails.photoReplacementDetected ||
         prev.tamperDetails.textManipulationDetected ||
         (prev.hasVisa && prev.visaDetails && !prev.visaDetails.overallCrossCheckPassed);
@@ -777,13 +856,32 @@ export default function Home() {
     const isWrongDoc = aiData.isWrongDocType === true;
     const isInvalidJurisdiction = aiData.isInvalidJurisdiction === true;
 
-    const isCompromised = isTampered || isDuplicate || isExpired || isWrongDoc || isInvalidJurisdiction;
+    // Check dummy & ICAO checksums dynamically
+    const fields = {
+      fullName: aiData.extractedFields?.fullName || '',
+      documentNumber: aiData.extractedFields?.documentNumber || '',
+      dateOfBirth: aiData.extractedFields?.dateOfBirth || '',
+      expiryDate: aiData.extractedFields?.expiryDate || '',
+    };
+    const dummyCheck = detectDummyOrSpecimen(fields, aiData.reasoning || '');
+    const isDummy = dummyCheck.isDummy || aiData.isDummySpecimen === true;
+
+    const line1 = aiData.extractedFields?.mrzLine1 || '';
+    const line2 = aiData.extractedFields?.mrzLine2 || '';
+    const icaoParsed = (line2 && line2.length >= 44) ? parseAndVerifyTd3Mrz(line1, line2) : null;
+    const icaoFailed = Boolean(icaoParsed && !icaoParsed.overallIcaoCompliant);
+    const vizMrzMismatch = Boolean(checkVizMrzConsistency(fields, line1, line2).hasMismatch);
+
+    const isCompromised = isTampered || isDuplicate || isExpired || isWrongDoc || isInvalidJurisdiction || isDummy || icaoFailed || vizMrzMismatch;
 
     let riskScore = 14;
-    if (isDuplicate) riskScore = 98;
+    if (isDummy) riskScore = 99;
+    else if (icaoFailed) riskScore = 98;
+    else if (isDuplicate) riskScore = 98;
     else if (isExpired) riskScore = 96;
     else if (isWrongDoc) riskScore = 95;
     else if (isInvalidJurisdiction) riskScore = 94;
+    else if (vizMrzMismatch) riskScore = 92;
     else if (aiData.riskScore !== undefined) riskScore = aiData.riskScore;
     else if (isTampered) riskScore = 84;
 
@@ -792,7 +890,11 @@ export default function Home() {
       const finalDuplicate = prev.isDuplicateDocument || isDuplicate;
       const finalWrongDoc = prev.isWrongDocumentType || isWrongDoc;
       const finalJurisdiction = prev.isInvalidJurisdiction || isInvalidJurisdiction;
-      const finalCompromised = isCompromised || finalExpired || finalDuplicate || finalWrongDoc || finalJurisdiction || prev.verdict === 'DETAIN';
+      const finalDummy = prev.isDummySpecimen || isDummy;
+      const finalIcaoFailed = prev.icaoChecksumFailed || icaoFailed;
+      const finalVizMrz = prev.vizMrzMismatch || vizMrzMismatch;
+
+      const finalCompromised = isCompromised || finalExpired || finalDuplicate || finalWrongDoc || finalJurisdiction || finalDummy || finalIcaoFailed || finalVizMrz || prev.verdict === 'DETAIN';
 
       const finalVerdict = finalCompromised ? 'DETAIN' : (aiData.recommendedAction || 'CLEAR');
       const finalRiskScore = finalCompromised ? Math.max(riskScore, prev.riskScore, 95) : riskScore;
@@ -803,6 +905,9 @@ export default function Home() {
         isDuplicateDocument: finalDuplicate,
         isWrongDocumentType: finalWrongDoc,
         isInvalidJurisdiction: finalJurisdiction,
+        isDummySpecimen: finalDummy,
+        icaoChecksumFailed: finalIcaoFailed,
+        vizMrzMismatch: finalVizMrz,
         extractedFields: {
           ...prev.extractedFields,
           fullName: aiData.extractedFields?.fullName || prev.extractedFields.fullName,
@@ -815,7 +920,9 @@ export default function Home() {
         tamperDetails: {
           ...prev.tamperDetails,
           photoReplacementDetected: isTampered,
-          textManipulationDetected: isTampered,
+          textManipulationDetected: isTampered || finalIcaoFailed || finalVizMrz,
+          fontInconsistencyScore: isTampered || finalIcaoFailed ? 0.88 : prev.tamperDetails.fontInconsistencyScore,
+          metadataTampered: isTampered || finalDuplicate || finalDummy || finalIcaoFailed,
           flaggedRegions: isTampered
             ? [
                 {
@@ -827,9 +934,16 @@ export default function Home() {
               ]
             : prev.tamperDetails.flaggedRegions,
         },
-        icaoDetails: {
+        icaoDetails: icaoParsed ? {
+          documentNumberValid: icaoParsed.documentNumberValid,
+          dobValid: icaoParsed.dobValid && !finalVizMrz,
+          expiryValid: icaoParsed.expiryValid && !finalExpired,
+          compositeValid: icaoParsed.compositeValid,
+          rawAlgorithm: 'ICAO Doc 9303 Part 3/7 (Modulus 10, 7-3-1 weights)',
+          overallIcaoCompliant: icaoParsed.overallIcaoCompliant && !finalExpired && !finalDummy && !finalVizMrz,
+          notes: icaoParsed.notes.length > 0 ? icaoParsed.notes : prev.icaoDetails.notes,
+        } : {
           ...prev.icaoDetails,
-          expiryValid: !finalExpired && prev.icaoDetails.expiryValid,
           overallIcaoCompliant: !finalCompromised && !isTampered,
           notes: aiData.forensicObservations && aiData.forensicObservations.length > 0
             ? aiData.forensicObservations
@@ -838,7 +952,11 @@ export default function Home() {
         riskScore: finalRiskScore,
         riskLevel: finalRiskScore > 65 ? 'HIGH' : finalRiskScore > 25 ? 'MEDIUM' : 'LOW',
         verdict: finalVerdict as any,
-        executiveSummary: aiData.reasoning || prev.executiveSummary,
+        executiveSummary: isDummy
+          ? `CRITICAL FRAUD: Document identified as an unauthenticated dummy/specimen template (${fields.documentNumber || 'A1234567'} / ${fields.fullName || 'ARJUN KUMAR'}). Detain traveler.`
+          : icaoFailed
+          ? `CRITICAL FRAUD: ICAO Doc 9303 Checksum verification failed across MRZ fields. Detain traveler.`
+          : (aiData.reasoning || prev.executiveSummary),
       };
     });
   };
