@@ -14,44 +14,44 @@ export default function DocumentViewer({ result }: Props) {
   const { extractedFields, tamperDetails } = result;
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 sm:p-4 shadow-sm border border-slate-200 dark:border-slate-800">
+    <div className="bg-white rounded-xl p-3.5 sm:p-4 shadow-xs border border-slate-200">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <div>
-          <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-            {result.documentType} • Transit Token
+          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            {result.documentType} SPECIMEN • IMMIGRATION TRANSIT TOKEN
           </div>
-          <div className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white font-mono">
+          <div className="text-sm sm:text-base font-black text-slate-900 font-mono">
             #{result.tokenNumber}
           </div>
         </div>
 
-        <div className="inline-flex rounded-lg p-1 bg-slate-100 dark:bg-slate-800 text-xs">
+        <div className="inline-flex rounded-lg p-1 bg-slate-100 border border-slate-200 text-xs">
           <button
             onClick={() => setViewMode('FORENSIC')}
-            className={`px-2.5 py-1 rounded-md font-semibold transition cursor-pointer ${
+            className={`px-3 py-1 rounded-md font-bold transition cursor-pointer ${
               viewMode === 'FORENSIC'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                ? 'bg-[#0a2540] text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             Forensic Bounding Boxes
           </button>
           <button
             onClick={() => setViewMode('ELA')}
-            className={`px-2.5 py-1 rounded-md font-semibold transition cursor-pointer ${
+            className={`px-3 py-1 rounded-md font-bold transition cursor-pointer ${
               viewMode === 'ELA'
-                ? 'bg-purple-600 text-white shadow-xs'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                ? 'bg-purple-700 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             ELA Tamper Heatmap
           </button>
           <button
             onClick={() => setViewMode('PLAIN')}
-            className={`px-2.5 py-1 rounded-md font-semibold transition cursor-pointer ${
+            className={`px-3 py-1 rounded-md font-bold transition cursor-pointer ${
               viewMode === 'PLAIN'
-                ? 'bg-slate-700 text-white shadow-xs'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                ? 'bg-slate-800 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             Plain Scan
@@ -59,7 +59,7 @@ export default function DocumentViewer({ result }: Props) {
         </div>
       </div>
 
-      <div className="relative rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-950 flex items-center justify-center min-h-[260px] sm:min-h-[320px]">
+      <div className="relative rounded-xl overflow-hidden border border-slate-200 bg-[#fafafa] flex items-center justify-center min-h-[260px] sm:min-h-[320px] shadow-inner">
         <img
           src={result.documentImageUrl}
           alt="Document Preview"
@@ -114,43 +114,43 @@ export default function DocumentViewer({ result }: Props) {
       </div>
 
       {extractedFields.visaType && (
-        <div className="mt-2.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs flex flex-wrap items-center justify-between gap-2">
+        <div className="mt-2.5 p-2 rounded-lg bg-amber-50 border border-amber-300 text-xs flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500 text-slate-900">
               Visa Endorsement
             </span>
-            <span className="font-semibold text-slate-800 dark:text-slate-200">
+            <span className="font-semibold text-slate-800">
               {extractedFields.visaType}
             </span>
           </div>
-          <div className="flex items-center gap-2.5 text-[11px] text-slate-600 dark:text-slate-300">
+          <div className="flex items-center gap-2.5 text-[11px] text-slate-700">
             <span>Stay: <b>{extractedFields.stayDurationDays || 30} Days</b></span>
             <span>Entry: <b>{extractedFields.entryValidity || 'MULTIPLE'}</b></span>
-            <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+            <span className="text-emerald-700 font-bold">
               ● IVFRT Active
             </span>
           </div>
         </div>
       )}
 
-      <div className="mt-2.5 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs bg-slate-50 dark:bg-slate-800/80 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700">
+      <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs bg-slate-50 p-3 rounded-xl border border-slate-200">
         <div>
-          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block uppercase">Name</span>
-          <span className="font-bold text-slate-900 dark:text-slate-100">{extractedFields.fullName}</span>
+          <span className="text-[10px] font-bold text-slate-500 block uppercase tracking-wider">Traveler Name</span>
+          <span className="font-extrabold text-slate-900">{extractedFields.fullName}</span>
         </div>
         <div>
-          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block uppercase">Document #</span>
-          <span className="font-mono font-bold text-slate-900 dark:text-slate-100">{extractedFields.documentNumber}</span>
+          <span className="text-[10px] font-bold text-slate-500 block uppercase tracking-wider">Document Number</span>
+          <span className="font-mono font-extrabold text-slate-900">{extractedFields.documentNumber}</span>
         </div>
         <div>
-          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block uppercase">Expiry Date</span>
-          <span className={`font-bold ${!result.icaoDetails.expiryValid ? 'text-rose-600 font-bold' : 'text-slate-900 dark:text-slate-100'}`}>
+          <span className="text-[10px] font-bold text-slate-500 block uppercase tracking-wider">Expiry Date</span>
+          <span className={`font-extrabold ${!result.icaoDetails.expiryValid ? 'text-rose-700' : 'text-slate-900'}`}>
             {extractedFields.expiryDate}
           </span>
         </div>
         <div>
-          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block uppercase">Nationality</span>
-          <span className="font-bold text-slate-900 dark:text-slate-100">{extractedFields.nationality} ({extractedFields.issuingCountry})</span>
+          <span className="text-[10px] font-bold text-slate-500 block uppercase tracking-wider">Nationality / Country</span>
+          <span className="font-extrabold text-slate-900">{extractedFields.nationality} ({extractedFields.issuingCountry})</span>
         </div>
       </div>
     </div>

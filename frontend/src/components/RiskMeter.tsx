@@ -14,34 +14,37 @@ export default function RiskMeter({ score, level, summary }: Props) {
   const isLow = level === 'LOW';
   const isMedium = level === 'MEDIUM';
 
-  const barColor = isLow ? 'bg-emerald-500' : isMedium ? 'bg-amber-500' : 'bg-rose-600';
-  const textColor = isLow
-    ? 'text-emerald-700 dark:text-emerald-400'
+  const barColor = isLow ? 'bg-emerald-600' : isMedium ? 'bg-amber-500' : 'bg-rose-600';
+  const badgeStyle = isLow
+    ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
     : isMedium
-    ? 'text-amber-700 dark:text-amber-400'
-    : 'text-rose-700 dark:text-rose-400';
+    ? 'bg-amber-50 text-amber-900 border-amber-300'
+    : 'bg-rose-50 text-rose-900 border-rose-300';
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 sm:p-4 shadow-sm border border-slate-200 dark:border-slate-800">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-          Composite Threat Risk Index
+    <div className="bg-white rounded-xl p-3.5 sm:p-4 shadow-xs border border-slate-200">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+        <span className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+          <span>Composite Threat Risk Index</span>
+          <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-300 font-semibold">
+            MHA Standard
+          </span>
         </span>
-        <div className="flex items-center gap-1.5">
+        <div className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded border text-xs font-black uppercase ${badgeStyle}`}>
           {isLow ? (
-            <ShieldCheck className="w-4 h-4 text-emerald-600" />
+            <ShieldCheck className="w-4 h-4 text-emerald-700" />
           ) : isMedium ? (
-            <AlertTriangle className="w-4 h-4 text-amber-600" />
+            <AlertTriangle className="w-4 h-4 text-amber-700" />
           ) : (
-            <AlertOctagon className="w-4 h-4 text-rose-600" />
+            <AlertOctagon className="w-4 h-4 text-rose-700" />
           )}
-          <span className={`text-xs font-black uppercase ${textColor}`}>
+          <span>
             {isLow ? 'LOW RISK (CLEARED)' : isMedium ? 'MEDIUM RISK (SECONDARY)' : 'HIGH RISK (CRITICAL THREAT)'}
           </span>
         </div>
       </div>
 
-      <div className="w-full h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden p-0.5 border border-slate-200 dark:border-slate-700">
+      <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200">
         <div
           className={`h-full rounded-full transition-all duration-700 ${barColor}`}
           style={{ width: `${Math.max(5, score)}%` }}
@@ -49,8 +52,8 @@ export default function RiskMeter({ score, level, summary }: Props) {
       </div>
 
       <div className="flex items-center justify-between mt-2 text-[11px]">
-        <span className="font-mono text-slate-500">Risk Score: <strong className="text-slate-900 dark:text-white font-bold">{score} / 100</strong></span>
-        <span className="text-slate-500 line-clamp-1 max-w-[240px] sm:max-w-none">{summary}</span>
+        <span className="font-mono text-slate-600">Risk Score: <strong className="text-slate-900 font-bold">{score} / 100</strong></span>
+        <span className="text-slate-600 font-medium line-clamp-1 max-w-[280px] sm:max-w-none">{summary}</span>
       </div>
     </div>
   );

@@ -1,86 +1,50 @@
 @import "tailwindcss";
 
 :root {
+  /* Official Government of India (GIGW) Neutral White Design System */
   --background: #f8fafc;
   --foreground: #0f172a;
   --card: #ffffff;
   --card-foreground: #0f172a;
   --card-border: #e2e8f0;
   
-  --primary: #0f2942;
+  --primary: #0a2540;
   --primary-foreground: #ffffff;
-  --primary-hover: #1e3a8a;
+  --primary-hover: #0d3156;
   
   --secondary: #f1f5f9;
-  --secondary-foreground: #334155;
+  --secondary-foreground: #1e293b;
   
   --muted: #64748b;
-  --muted-background: #f1f5f9;
+  --muted-background: #f8fafc;
   
-  --saffron: #d97706;
+  --saffron: #e35205;
   --saffron-foreground: #ffffff;
+  --india-green: #00875a;
   
-  --success: #059669;
+  --success: #047857;
   --success-background: #ecfdf5;
   --success-border: #a7f3d0;
   --success-foreground: #065f46;
   
-  --warning: #d97706;
+  --warning: #b45309;
   --warning-background: #fffbeb;
   --warning-border: #fde68a;
-  --warning-foreground: #92400e;
+  --warning-foreground: #78350f;
   
-  --danger: #dc2626;
+  --danger: #b91c1c;
   --danger-background: #fef2f2;
   --danger-border: #fecaca;
-  --danger-foreground: #991b1b;
+  --danger-foreground: #7f1d1d;
   
-  --border: #cbd5e1;
+  --border: #e2e8f0;
   --input: #ffffff;
-  --ring: #2563eb;
+  --ring: #0a2540;
   --radius: 0.75rem;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0b1324;
-    --foreground: #f8fafc;
-    --card: #131f37;
-    --card-foreground: #f8fafc;
-    --card-border: #1e293b;
-    
-    --primary: #38bdf8;
-    --primary-foreground: #0b1324;
-    --primary-hover: #7dd3fc;
-    
-    --secondary: #1e293b;
-    --secondary-foreground: #cbd5e1;
-    
-    --muted: #94a3b8;
-    --muted-background: #1e293b;
-    
-    --saffron: #f59e0b;
-    --saffron-foreground: #0b1324;
-    
-    --success: #10b981;
-    --success-background: #064e3b;
-    --success-border: #047857;
-    --success-foreground: #ecfdf5;
-    
-    --warning: #fbbf24;
-    --warning-background: #78350f;
-    --warning-border: #b45309;
-    --warning-foreground: #fffbeb;
-    
-    --danger: #ef4444;
-    --danger-background: #7f1d1d;
-    --danger-border: #b91c1c;
-    --danger-foreground: #fef2f2;
-    
-    --border: #334155;
-    --input: #1e293b;
-    --ring: #38bdf8;
-  }
+.tiranga-stripe {
+  background: linear-gradient(90deg, #FF9933 0%, #FF9933 33.3%, #FFFFFF 33.3%, #FFFFFF 66.6%, #138808 66.6%, #138808 100%);
 }
 
 body {

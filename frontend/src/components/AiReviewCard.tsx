@@ -87,21 +87,21 @@ export default function AiReviewCard({ result, onApplyAiResult }: Props) {
   };
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl p-3 sm:p-4 shadow-sm border border-slate-200 dark:border-slate-800">
+    <div className="bg-white rounded-xl p-3 sm:p-4 shadow-xs border border-slate-200">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-purple-500/10 dark:bg-purple-400/20 border border-purple-500/30 flex items-center justify-center">
-            <Bot className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center">
+            <Bot className="w-4 h-4 text-[#0A2540]" />
           </div>
           <div>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
               <span>Multimodal AI Forensic Audit</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 font-bold">
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-900 border border-blue-200 font-bold">
                 {aiAnalysis?.provider || 'Groq LPU / Gemini Vision'}
               </span>
             </h3>
             <span className="text-[10px] text-slate-500 block">
-              Cognitive LLM Vision Review • Semantic Forgery Verification
+              Automated Forensic Cognitive Vision • Semantic Forgery Verification
             </span>
           </div>
         </div>
@@ -109,7 +109,7 @@ export default function AiReviewCard({ result, onApplyAiResult }: Props) {
         <button
           onClick={handleRunAiAudit}
           disabled={loading}
-          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-xs transition disabled:opacity-50 cursor-pointer"
+          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-[#0A2540] hover:bg-[#081e35] text-white shadow-xs transition disabled:opacity-50 cursor-pointer"
         >
           {loading ? (
             <>
@@ -126,34 +126,34 @@ export default function AiReviewCard({ result, onApplyAiResult }: Props) {
       </div>
 
       {aiAnalysis ? (
-        <div className="p-3 rounded-lg bg-purple-50/40 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/60 space-y-2 text-xs">
-          <div className="flex items-center justify-between border-b border-purple-200/60 dark:border-purple-800/40 pb-2">
-            <div className="flex items-center gap-1.5">
-              <span className="font-bold text-slate-900 dark:text-slate-100">AI Examiner Verdict:</span>
+        <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-2.5 text-xs">
+          <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-slate-900">AI Forensic Verdict:</span>
               <span
-                className={`font-black px-2 py-0.5 rounded text-[10px] ${
+                className={`font-black px-2.5 py-0.5 rounded border text-[10px] ${
                   aiAnalysis.recommendedAction === 'CLEAR'
-                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
                     : aiAnalysis.recommendedAction === 'DETAIN'
-                    ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
-                    : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                    ? 'bg-rose-50 text-rose-800 border-rose-300'
+                    : 'bg-amber-50 text-amber-800 border-amber-300'
                 }`}
               >
                 {aiAnalysis.recommendedAction || 'CLEAR'}
               </span>
               {isLiveAi && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold border border-emerald-500/30">
+                <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 font-semibold border border-emerald-300">
                   Live Vision API
                 </span>
               )}
             </div>
-            <div className="text-[10px] font-mono text-purple-700 dark:text-purple-300">
-              Confidence: <b>{aiAnalysis.aiConfidenceScore || 96.5}%</b>
+            <div className="text-[11px] font-mono text-slate-700">
+              Confidence: <strong className="text-slate-900">{aiAnalysis.aiConfidenceScore || 96.5}%</strong>
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+            <div className="text-[11px] font-bold text-slate-700">
               Forensic Vision Observations:
             </div>
             <ul className="space-y-1">
@@ -162,8 +162,8 @@ export default function AiReviewCard({ result, onApplyAiResult }: Props) {
                 'Font kerning and numerical baseline alignment consistent.',
                 'Substrate reflection shows authentic laminate security pattern.'
               ]).map((obs: string, idx: number) => (
-                <li key={idx} className="flex items-start gap-1.5 text-slate-600 dark:text-slate-400 text-[11px]">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-purple-500 shrink-0 mt-0.5" />
+                <li key={idx} className="flex items-start gap-1.5 text-slate-600 text-[11px]">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-[#0A2540] shrink-0 mt-0.5" />
                   <span>{obs}</span>
                 </li>
               ))}
@@ -171,18 +171,18 @@ export default function AiReviewCard({ result, onApplyAiResult }: Props) {
           </div>
 
           {aiAnalysis.reasoning && (
-            <div className="pt-2 border-t border-purple-200/60 dark:border-purple-800/40 text-[11px] text-slate-600 dark:text-slate-400">
-              <span className="font-semibold text-slate-800 dark:text-slate-200">Summary: </span>
+            <div className="pt-2 border-t border-slate-200 text-[11px] text-slate-600">
+              <strong className="text-slate-800">Executive Summary: </strong>
               {aiAnalysis.reasoning}
             </div>
           )}
         </div>
       ) : (
-        <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-dashed border-slate-200 dark:border-slate-700 text-xs flex items-center justify-between text-slate-500 dark:text-slate-400">
+        <div className="p-3.5 rounded-lg bg-slate-50 border border-dashed border-slate-300 text-xs flex items-center justify-between text-slate-600">
           <div className="flex items-center gap-2">
-            <Cpu className="w-4 h-4 text-purple-500 shrink-0" />
+            <Cpu className="w-4 h-4 text-[#0A2540] shrink-0" />
             <span>
-              Click <b>&quot;Run Live AI Audit&quot;</b> to execute deep multimodal reasoning with Google Gemini 3.6 Flash.
+              Click <strong className="text-slate-900">&quot;Run Live AI Audit&quot;</strong> to execute deep multimodal reasoning on the document specimen.
             </span>
           </div>
         </div>
