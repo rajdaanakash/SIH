@@ -113,6 +113,67 @@ export default function DocumentViewer({ result }: Props) {
         </div>
       </div>
 
+      {/* Critical Security Alert Banners */}
+      {result.isDuplicateDocument && (
+        <div className="mb-3 p-3 rounded-xl bg-rose-50 border-2 border-rose-400 text-rose-900 flex items-start gap-2.5">
+          <ShieldAlert className="w-5 h-5 text-rose-700 shrink-0 mt-0.5" />
+          <div>
+            <div className="text-xs font-black uppercase tracking-wider text-rose-800 flex items-center gap-1.5">
+              <span>FRAUD DETECTED: DUPLICATE SPECIMEN INGESTION</span>
+              <span className="px-1.5 py-0.2 rounded bg-rose-700 text-white text-[9px] font-bold">DETAIN</span>
+            </div>
+            <div className="text-[11px] font-semibold text-rose-700 mt-0.5">
+              The identical document file/image was submitted for both the Passport and Visa slots. A valid primary passport booklet and a separate valid entry visa are required.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {result.isExpired && (
+        <div className="mb-3 p-3 rounded-xl bg-rose-50 border-2 border-rose-400 text-rose-900 flex items-start gap-2.5 animate-pulse">
+          <ShieldAlert className="w-5 h-5 text-rose-700 shrink-0 mt-0.5" />
+          <div>
+            <div className="text-xs font-black uppercase tracking-wider text-rose-800 flex items-center gap-1.5">
+              <span>CRITICAL BORDER VIOLATION: TRAVEL DOCUMENT IS EXPIRED</span>
+              <span className="px-1.5 py-0.2 rounded bg-rose-700 text-white text-[9px] font-bold">TRANSIT DENIED</span>
+            </div>
+            <div className="text-[11px] font-semibold text-rose-700 mt-0.5">
+              Document Expiry Date: <strong className="underline">{extractedFields.expiryDate}</strong> {result.expiryYearsExpired ? `(~${result.expiryYearsExpired} years in the past relative to current year 2026)` : '(Date is in the past)'}. Entry is prohibited under Section 3 of the Passports Act.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {result.isWrongDocumentType && (
+        <div className="mb-3 p-3 rounded-xl bg-amber-50 border-2 border-amber-400 text-amber-900 flex items-start gap-2.5">
+          <AlertTriangle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+          <div>
+            <div className="text-xs font-black uppercase tracking-wider text-amber-800 flex items-center gap-1.5">
+              <span>INVALID PRIMARY SPECIMEN: VISA STICKER IN PASSPORT SLOT</span>
+              <span className="px-1.5 py-0.2 rounded bg-amber-700 text-white text-[9px] font-bold">INVALID DOC</span>
+            </div>
+            <div className="text-[11px] font-semibold text-amber-800 mt-0.5">
+              A Visa sticker/foil was uploaded into the Passport slot. A national Passport booklet is mandatory for international border crossing.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {result.isInvalidJurisdiction && (
+        <div className="mb-3 p-3 rounded-xl bg-rose-50 border-2 border-rose-400 text-rose-900 flex items-start gap-2.5">
+          <AlertTriangle className="w-5 h-5 text-rose-700 shrink-0 mt-0.5" />
+          <div>
+            <div className="text-xs font-black uppercase tracking-wider text-rose-800 flex items-center gap-1.5">
+              <span>JURISDICTION REJECTION: FOREIGN VISA PRESENTED AT INDIAN BORDER</span>
+              <span className="px-1.5 py-0.2 rounded bg-rose-700 text-white text-[9px] font-bold">REJECTED</span>
+            </div>
+            <div className="text-[11px] font-semibold text-rose-700 mt-0.5">
+              Presented Visa was issued by a foreign nation (e.g. United States). Entering the Republic of India strictly requires a valid Indian Entry Visa / e-Visa issued by the Government of India.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Specimen Image Canvas */}
       <div className="relative rounded-xl overflow-hidden border border-slate-200 bg-[#fafafa] flex items-center justify-center min-h-[260px] sm:min-h-[320px] shadow-inner">
         {isTerminalBlank ? (
@@ -196,12 +257,26 @@ export default function DocumentViewer({ result }: Props) {
             </div>
             <span
               className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                visaDetails.overallCrossCheckPassed !== false
+                result.isDuplicateDocument
+                  ? 'bg-rose-100 text-rose-900 border-rose-400 font-black'
+                  : result.isExpired
+                  ? 'bg-rose-100 text-rose-900 border-rose-400 font-black'
+                  : result.isInvalidJurisdiction
+                  ? 'bg-rose-100 text-rose-900 border-rose-400 font-black'
+                  : visaDetails.overallCrossCheckPassed !== false
                   ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
                   : 'bg-rose-50 text-rose-800 border-rose-300'
               }`}
             >
-              {visaDetails.overallCrossCheckPassed !== false ? '✓ 100% CORRELATED' : '⚠️ CROSS-CHECK MISMATCH'}
+              {result.isDuplicateDocument
+                ? '⚠️ FRAUD / DUPLICATE UPLOAD'
+                : result.isExpired
+                ? '⚠️ SPECIMEN EXPIRED'
+                : result.isInvalidJurisdiction
+                ? '⚠️ JURISDICTION REJECTED'
+                : visaDetails.overallCrossCheckPassed !== false
+                ? '✓ 100% CORRELATED'
+                : '⚠️ CROSS-CHECK MISMATCH'}
             </span>
           </div>
 
@@ -209,9 +284,20 @@ export default function DocumentViewer({ result }: Props) {
             <div className="p-2 rounded-lg bg-white border border-slate-200">
               <span className="text-[10px] font-bold text-slate-500 block uppercase">Traveler Name</span>
               <div className="font-bold text-slate-900 truncate">{extractedFields.fullName}</div>
-              <div className="text-[9.5px] text-emerald-700 font-semibold flex items-center gap-1 mt-0.5">
-                <CheckCircle2 className="w-3 h-3 shrink-0" />
-                <span>Passport & Visa Match</span>
+              <div className={`text-[9.5px] font-semibold flex items-center gap-1 mt-0.5 ${
+                result.isDuplicateDocument ? 'text-rose-700' : 'text-emerald-700'
+              }`}>
+                {result.isDuplicateDocument ? (
+                  <>
+                    <XCircle className="w-3 h-3 shrink-0" />
+                    <span>Identical File Injected</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-3 h-3 shrink-0" />
+                    <span>Passport & Visa Match</span>
+                  </>
+                )}
               </div>
             </div>
 
@@ -221,9 +307,14 @@ export default function DocumentViewer({ result }: Props) {
                 {visaDetails.passportNumberLinked || extractedFields.documentNumber}
               </div>
               <div className={`text-[9.5px] font-semibold flex items-center gap-1 mt-0.5 ${
-                visaDetails.passportMatched !== false ? 'text-emerald-700' : 'text-rose-700'
+                result.isDuplicateDocument || visaDetails.passportMatched === false ? 'text-rose-700' : 'text-emerald-700'
               }`}>
-                {visaDetails.passportMatched !== false ? (
+                {result.isDuplicateDocument ? (
+                  <>
+                    <XCircle className="w-3 h-3 shrink-0" />
+                    <span>Duplicate Bypass Attempt</span>
+                  </>
+                ) : visaDetails.passportMatched !== false ? (
                   <>
                     <CheckCircle2 className="w-3 h-3 shrink-0" />
                     <span>Exact Match</span>
@@ -247,12 +338,23 @@ export default function DocumentViewer({ result }: Props) {
 
             <div className="p-2 rounded-lg bg-white border border-slate-200">
               <span className="text-[10px] font-bold text-slate-500 block uppercase">Visa Validity</span>
-              <div className="font-bold text-slate-900 truncate">
-                {visaDetails.validUntil || 'Active'}
+              <div className={`font-bold truncate ${result.isExpired ? 'text-rose-700' : 'text-slate-900'}`}>
+                {visaDetails.validUntil || extractedFields.expiryDate || 'Active'}
               </div>
-              <div className="text-[9.5px] text-emerald-700 font-semibold flex items-center gap-1 mt-0.5">
-                <CheckCircle2 className="w-3 h-3 shrink-0" />
-                <span>Before Passport Expiry</span>
+              <div className={`text-[9.5px] font-semibold flex items-center gap-1 mt-0.5 ${
+                result.isExpired ? 'text-rose-700' : 'text-emerald-700'
+              }`}>
+                {result.isExpired ? (
+                  <>
+                    <XCircle className="w-3 h-3 shrink-0" />
+                    <span>EXPIRED ({result.expiryYearsExpired ? `~${result.expiryYearsExpired} yrs` : 'Invalid'})</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-3 h-3 shrink-0" />
+                    <span>Before Passport Expiry</span>
+                  </>
+                )}
               </div>
             </div>
           </div>

@@ -13,6 +13,7 @@ import { SCENARIO_PRESETS } from '../lib/presets';
 import { ScenarioPreset, VerificationResult } from '../lib/types';
 import { computeClientEla } from '../lib/elaEngine';
 import { compressAndResizeImage } from '../lib/imageUtils';
+import { checkDocumentExpiry, isDuplicateUpload } from '../lib/dateUtils';
 import { ShieldCheck, RefreshCw, Smartphone, AlertCircle, AlertOctagon, Sparkles, RotateCcw } from 'lucide-react';
 
 const BLANK_TERMINAL_RESULT: VerificationResult = {
@@ -272,25 +273,126 @@ export default function Home() {
         }
       }
 
-      // Check if Visa cross-check failed
+      // 5. DETERMINISTIC SECURITY GATEKEEPERS (Independent of AI to prevent bypass)
+      // a) Duplicate Document Ingestion Detection:
+      const duplicateDetected = Boolean(visaBase64Url) && isDuplicateUpload(passportFile, visaFile, passportBase64Url, visaBase64Url);
+
+      // b) Expiration Date Validation against current year 2026:
+      const passportExpiryCheck = checkDocumentExpiry(extractedFields.expiryDate);
+      const visaExpiryCheck = checkDocumentExpiry(visaDetails?.validUntil);
+      const isPassportExpired = passportExpiryCheck.isExpired;
+      const isVisaExpired = hasVisa && visaExpiryCheck.isExpired;
+      const isExpired = isPassportExpired || isVisaExpired || (aiData?.isExpired === true);
+
+      // c) Primary Document Type Classification (Detect Visa Sticker placed in Passport Slot):
+      const mrz1Upper = (extractedFields.mrzLine1 || '').toUpperCase().trim();
+      const isVisaInPassportSlot = 
+        mrz1Upper.startsWith('VN') || 
+        mrz1Upper.startsWith('V<') ||
+        (extractedFields.documentNumber && extractedFields.documentNumber.toUpperCase().startsWith('V<')) ||
+        aiData?.isWrongDocType === true ||
+        (aiData?.detectedDocType && aiData.detectedDocType.toUpperCase().includes('VISA'));
+
+      // d) Consular Jurisdiction Check (US Visa / Foreign Visa at Indian Border):
+      const isForeignVisaAtIndianBorder = Boolean(
+        aiData?.isInvalidJurisdiction === true ||
+        (hasVisa && (
+          extractedFields.issuingCountry?.toUpperCase() === 'USA' ||
+          rawNationality === 'USA' ||
+          aiData?.visaDetails?.issuingPost?.toUpperCase().includes('USA') ||
+          aiData?.visaDetails?.issuingPost?.toUpperCase().includes('BANGKOK') ||
+          (aiData?.reasoning && aiData.reasoning.toLowerCase().includes('united states'))
+        ))
+      );
+
+      // Collect deterministic security violation warnings:
+      const securityViolations: string[] = [];
+      if (duplicateDetected) {
+        securityViolations.push('CRITICAL FRAUD: The identical document was submitted for both the Passport and Visa slots.');
+      }
+      if (isPassportExpired) {
+        securityViolations.push(`CRITICAL SECURITY VIOLATION: Primary travel document is EXPIRED (${passportExpiryCheck.statusText}).`);
+      }
+      if (isVisaExpired) {
+        securityViolations.push(`CRITICAL SECURITY VIOLATION: Entry Visa is EXPIRED (${visaExpiryCheck.statusText}).`);
+      }
+      if (isVisaInPassportSlot) {
+        securityViolations.push('INVALID PRIMARY SPECIMEN: A Visa sticker/foil was uploaded in place of a primary Passport booklet.');
+      }
+      if (isForeignVisaAtIndianBorder) {
+        securityViolations.push('JURISDICTION REJECTION: Uploaded Visa is issued by a foreign authority (USA). Valid Indian Entry Visa required.');
+      }
+
+      // If duplicate or expired or foreign visa, adjust visaDetails:
+      if (duplicateDetected && visaDetails) {
+        visaDetails = {
+          ...visaDetails,
+          passportMatched: false,
+          overallCrossCheckPassed: false,
+          crossCheckNotes: [
+            'CRITICAL SECURITY ALERT: Duplicate specimen uploaded. Identical image provided for both Passport and Visa slots.',
+          ],
+        };
+      }
+      if ((isPassportExpired || isVisaExpired) && visaDetails) {
+        visaDetails = {
+          ...visaDetails,
+          validityAligned: false,
+          overallCrossCheckPassed: false,
+          crossCheckNotes: [
+            ...(visaDetails.crossCheckNotes || []),
+            isPassportExpired ? `Passport: ${passportExpiryCheck.statusText}` : '',
+            isVisaExpired ? `Visa: ${visaExpiryCheck.statusText}` : '',
+          ].filter(Boolean),
+        };
+      }
+      if (isForeignVisaAtIndianBorder && visaDetails) {
+        visaDetails = {
+          ...visaDetails,
+          overallCrossCheckPassed: false,
+          crossCheckNotes: [
+            ...(visaDetails.crossCheckNotes || []),
+            'JURISDICTION VIOLATION: Foreign Visa (USA) invalid for entering the Republic of India.',
+          ],
+        };
+      }
+
+      // Re-evaluate visaCrossCheckFailed with updated visaDetails:
       const visaCrossCheckFailed = hasVisa && visaDetails && !visaDetails.overallCrossCheckPassed;
       const visaMissing = requiresVisa && !hasVisa;
 
+      const isCriticallyCompromised =
+        duplicateDetected ||
+        isExpired ||
+        isVisaInPassportSlot ||
+        isForeignVisaAtIndianBorder ||
+        isTampered ||
+        visaCrossCheckFailed;
+
       // Calculate composite Threat Risk Score
       let riskScore = 12;
-      if (aiData?.riskScore !== undefined) {
-        riskScore = aiData.riskScore;
+      if (duplicateDetected) {
+        riskScore = 98;
+      } else if (isPassportExpired || isVisaExpired) {
+        riskScore = 96;
+      } else if (isVisaInPassportSlot) {
+        riskScore = 95;
+      } else if (isForeignVisaAtIndianBorder) {
+        riskScore = 94;
       } else if (isTampered) {
-        riskScore = 84;
+        riskScore = 88;
       } else if (visaCrossCheckFailed) {
         riskScore = 78;
       } else if (visaMissing) {
         riskScore = 48;
+      } else if (aiData?.riskScore !== undefined) {
+        riskScore = aiData.riskScore;
       } else if (elaScore > 0.4) {
         riskScore = 68;
       }
 
-      const verdict = isTampered || visaCrossCheckFailed
+      // CRITICAL: If compromised in ANY way, verdict MUST BE DETAIN
+      const verdict: 'CLEAR' | 'SECONDARY_INSPECTION' | 'DETAIN' = isCriticallyCompromised
         ? 'DETAIN'
         : visaMissing
         ? 'SECONDARY_INSPECTION'
@@ -298,6 +400,30 @@ export default function Home() {
 
       // Flagged regions for visual bounding box
       const flaggedRegions: any[] = [];
+      if (duplicateDetected) {
+        flaggedRegions.push({
+          field: 'Duplicate Ingestion',
+          description: 'Identical document submitted for both passport and visa slots.',
+          severity: 'HIGH' as const,
+          box: { x: 5, y: 5, width: 90, height: 40 },
+        });
+      }
+      if (isExpired) {
+        flaggedRegions.push({
+          field: 'Expired Document',
+          description: isPassportExpired ? passportExpiryCheck.statusText : visaExpiryCheck.statusText,
+          severity: 'HIGH' as const,
+          box: { x: 45, y: 60, width: 50, height: 25 },
+        });
+      }
+      if (isVisaInPassportSlot) {
+        flaggedRegions.push({
+          field: 'Invalid Document Type',
+          description: 'Visa sticker/foil uploaded in primary passport slot.',
+          severity: 'HIGH' as const,
+          box: { x: 15, y: 15, width: 70, height: 35 },
+        });
+      }
       if (isTampered) {
         flaggedRegions.push({
           field: isPhotoReplaced ? 'Portrait Inconsistency' : isTextForged ? 'Text Modification' : 'Anomaly Detected',
@@ -309,7 +435,7 @@ export default function Home() {
       if (visaCrossCheckFailed) {
         flaggedRegions.push({
           field: 'Visa Cross-Check Mismatch',
-          description: visaDetails.crossCheckNotes?.join(' ') || 'Passport number or traveler name does not match Visa record.',
+          description: visaDetails?.crossCheckNotes?.join(' ') || 'Passport number or traveler name does not match Visa record.',
           severity: 'HIGH' as const,
           box: { x: 55, y: 15, width: 40, height: 25 },
         });
@@ -321,18 +447,26 @@ export default function Home() {
         isIndianNational: isIndian,
         requiresVisa,
         hasVisa,
+        isExpired,
+        expiryYearsExpired: passportExpiryCheck.yearsExpired,
+        isDuplicateDocument: duplicateDetected,
+        isWrongDocumentType: isVisaInPassportSlot,
+        isInvalidJurisdiction: isForeignVisaAtIndianBorder,
+        securityAlertMessages: securityViolations,
         timestamp: new Date().toLocaleString('en-IN') + ' IST',
         tokenNumber: `SSB-2026-${Math.floor(10000 + Math.random() * 90000)}`,
         documentType: 'PASSPORT',
         extractedFields,
         icaoDetails: {
-          documentNumberValid: !isTampered && !isTextForged,
+          documentNumberValid: !isTampered && !isTextForged && !isVisaInPassportSlot,
           dobValid: true,
-          expiryValid: !isTampered && !isTextForged,
-          compositeValid: !isTampered && !isTextForged,
+          expiryValid: !isExpired && !isTampered && !isTextForged,
+          compositeValid: !isExpired && !isTampered && !isTextForged && !isVisaInPassportSlot,
           rawAlgorithm: 'ICAO Doc 9303 Part 3/7 (Modulus 10, 7-3-1 weights)',
-          overallIcaoCompliant: !isTampered && !isTextForged,
-          notes: aiData?.forensicObservations && aiData.forensicObservations.length > 0
+          overallIcaoCompliant: !isExpired && !isTampered && !isTextForged && !isVisaInPassportSlot,
+          notes: securityViolations.length > 0
+            ? securityViolations
+            : aiData?.forensicObservations && aiData.forensicObservations.length > 0
             ? aiData.forensicObservations
             : [
                 'Autonomous multi-module inspection completed.',
@@ -347,12 +481,12 @@ export default function Home() {
           stampForgeryDetected: false,
           stampCircularityAnomaly: 0.02,
           elaAnomalyScore: elaScore,
-          metadataTampered: isTampered,
+          metadataTampered: isTampered || duplicateDetected,
           flaggedRegions,
         },
         biometricDetails: {
-          faceMatched: !isTampered,
-          similarityScore: isTampered ? 48.2 : 94.8,
+          faceMatched: !isTampered && !duplicateDetected,
+          similarityScore: isTampered || duplicateDetected ? 48.2 : 94.8,
           livenessVerified: true,
           livenessConfidence: 96.0,
           faceDetectedInDocument: true,
@@ -361,18 +495,20 @@ export default function Home() {
         watchlistHit: false,
         riskScore,
         riskLevel: riskScore > 65 ? 'HIGH' : riskScore > 25 ? 'MEDIUM' : 'LOW',
-        verdict: verdict as 'CLEAR' | 'SECONDARY_INSPECTION' | 'DETAIN',
-        executiveSummary: aiData?.reasoning || (
-          isTampered
-            ? 'CRITICAL ALERT: Tampering detected across primary document. Detain traveler for secondary interrogation.'
-            : visaCrossCheckFailed
-            ? 'DISCREPANCY ALERT: Passport credentials do not reconcile with Visa permit. Secondary inspection required.'
-            : visaMissing
-            ? `FOREIGN PASSPORT DETECTED (${rawNationality} • ${extractedFields.fullName}): Valid Indian Entry Visa / Transit Permit must be uploaded to complete border clearance.`
-            : isIndian
-            ? 'Verified authentic Indian Passport via Autonomous Multi-Module Pipeline (ICAO + ELA + Multimodal AI Vision). Cleared for border transit (Visa Exempt).'
-            : 'Verified foreign passport & entry visa via Autonomous Multi-Module Pipeline. Cleared for border transit.'
-        ),
+        verdict,
+        executiveSummary: securityViolations.length > 0
+          ? securityViolations.join(' ')
+          : (aiData?.reasoning || (
+            isTampered
+              ? 'CRITICAL ALERT: Tampering detected across primary document. Detain traveler for secondary interrogation.'
+              : visaCrossCheckFailed
+              ? 'DISCREPANCY ALERT: Passport credentials do not reconcile with Visa permit. Secondary inspection required.'
+              : visaMissing
+              ? `FOREIGN PASSPORT DETECTED (${rawNationality} • ${extractedFields.fullName}): Valid Indian Entry Visa / Transit Permit must be uploaded to complete border clearance.`
+              : isIndian
+              ? 'Verified authentic Indian Passport via Autonomous Multi-Module Pipeline (ICAO + ELA + Multimodal AI Vision). Cleared for border transit (Visa Exempt).'
+              : 'Verified foreign passport & entry visa via Autonomous Multi-Module Pipeline. Cleared for border transit.'
+          )),
         documentImageUrl: passportBase64Url,
         documentFaceUrl: passportBase64Url,
         liveTravelerPhotoUrl: '/samples/face_clean_live.svg',
@@ -466,35 +602,89 @@ export default function Home() {
         };
       }
 
+      // Deterministic Gatekeepers for Attached Visa:
+      const duplicateDetected = isDuplicateUpload(null, visaFile, currentResult.documentImageUrl, visaBase64Url);
+      const visaExpiryCheck = checkDocumentExpiry(visaDetails?.validUntil);
+      const isVisaExpired = visaExpiryCheck.isExpired;
+      const isForeignVisa = Boolean(
+        aiData?.isInvalidJurisdiction === true ||
+        visaDetails?.issuingPost?.toUpperCase().includes('USA') ||
+        visaDetails?.issuingPost?.toUpperCase().includes('BANGKOK') ||
+        currentResult.extractedFields.issuingCountry?.toUpperCase() === 'USA'
+      );
+
+      const securityViolations: string[] = [...(currentResult.securityAlertMessages || [])];
+      if (duplicateDetected) {
+        securityViolations.push('CRITICAL FRAUD: The identical document was submitted for both the Passport and Visa slots.');
+        visaDetails.passportMatched = false;
+        visaDetails.overallCrossCheckPassed = false;
+        visaDetails.crossCheckNotes = [
+          'CRITICAL FRAUD: Identical specimen uploaded for both passport and visa. Inspection blocked.',
+        ];
+      }
+      if (isVisaExpired) {
+        securityViolations.push(`CRITICAL SECURITY VIOLATION: Entry Visa is EXPIRED (${visaExpiryCheck.statusText}).`);
+        visaDetails.validityAligned = false;
+        visaDetails.overallCrossCheckPassed = false;
+        visaDetails.crossCheckNotes = [
+          ...(visaDetails.crossCheckNotes || []),
+          `Visa: ${visaExpiryCheck.statusText}`,
+        ];
+      }
+      if (isForeignVisa) {
+        securityViolations.push('JURISDICTION REJECTION: Uploaded Visa is issued by a foreign nation (USA). Valid Indian Entry Visa required.');
+        visaDetails.overallCrossCheckPassed = false;
+        visaDetails.crossCheckNotes = [
+          ...(visaDetails.crossCheckNotes || []),
+          'JURISDICTION ERROR: Foreign Visa (USA) invalid for entering the Republic of India.',
+        ];
+      }
+
       const visaCrossCheckFailed = !visaDetails.overallCrossCheckPassed;
       const isTampered = currentResult.tamperDetails.photoReplacementDetected || currentResult.tamperDetails.textManipulationDetected || (aiData?.tamperDetected === true);
 
-      let newRiskScore = 14;
-      if (aiData?.riskScore !== undefined) {
-        newRiskScore = aiData.riskScore;
-      } else if (isTampered || visaCrossCheckFailed) {
-        newRiskScore = isTampered ? 88 : 78;
-      }
+      const isCriticallyCompromised =
+        duplicateDetected ||
+        isVisaExpired ||
+        isForeignVisa ||
+        currentResult.isExpired ||
+        currentResult.isWrongDocumentType ||
+        isTampered ||
+        visaCrossCheckFailed;
 
-      const newVerdict = aiData?.recommendedAction || (
-        newRiskScore > 65 ? 'DETAIN' : newRiskScore > 35 ? 'SECONDARY_INSPECTION' : 'CLEAR'
-      );
+      let newRiskScore = 14;
+      if (duplicateDetected) newRiskScore = 98;
+      else if (isVisaExpired || currentResult.isExpired) newRiskScore = 96;
+      else if (isForeignVisa) newRiskScore = 94;
+      else if (isTampered) newRiskScore = 88;
+      else if (visaCrossCheckFailed) newRiskScore = 78;
+      else if (aiData?.riskScore !== undefined) newRiskScore = aiData.riskScore;
+
+      const newVerdict: 'CLEAR' | 'SECONDARY_INSPECTION' | 'DETAIN' = isCriticallyCompromised
+        ? 'DETAIN'
+        : (aiData?.recommendedAction || (newRiskScore > 65 ? 'DETAIN' : newRiskScore > 35 ? 'SECONDARY_INSPECTION' : 'CLEAR'));
 
       setCurrentResult((prev) => ({
         ...prev,
         hasVisa: true,
         visaImageUrl: visaBase64Url,
         visaDetails,
+        isExpired: prev.isExpired || isVisaExpired,
+        isDuplicateDocument: prev.isDuplicateDocument || duplicateDetected,
+        isInvalidJurisdiction: prev.isInvalidJurisdiction || isForeignVisa,
+        securityAlertMessages: securityViolations,
         riskScore: newRiskScore,
         riskLevel: newRiskScore > 65 ? 'HIGH' : newRiskScore > 25 ? 'MEDIUM' : 'LOW',
-        verdict: newVerdict as any,
-        executiveSummary: aiData?.reasoning || (
-          visaCrossCheckFailed
-            ? 'DISCREPANCY ALERT: Passport credentials do not reconcile with Visa permit. Detain traveler.'
-            : isTampered
-            ? 'CRITICAL ALERT: Primary passport flagged for tampering. Detain traveler.'
-            : 'Foreign national Passport + Visa successfully cross-reconciled. Cleared for border transit.'
-        ),
+        verdict: newVerdict,
+        executiveSummary: securityViolations.length > 0
+          ? securityViolations.join(' ')
+          : (aiData?.reasoning || (
+            visaCrossCheckFailed
+              ? 'DISCREPANCY ALERT: Passport credentials do not reconcile with Visa permit. Detain traveler.'
+              : isTampered
+              ? 'CRITICAL ALERT: Primary passport flagged for tampering. Detain traveler.'
+              : 'Foreign national Passport + Visa successfully cross-reconciled. Cleared for border transit.'
+          )),
         aiAuditData: aiData || prev.aiAuditData,
       }));
     } catch (err) {
@@ -527,6 +717,32 @@ export default function Home() {
         };
       }
 
+      // If document is already compromised, DO NOT ALLOW BIOMETRICS TO CLEAR IT!
+      const isAlreadyCompromised =
+        prev.verdict === 'DETAIN' ||
+        prev.isExpired ||
+        prev.isDuplicateDocument ||
+        prev.isWrongDocumentType ||
+        prev.isInvalidJurisdiction ||
+        prev.tamperDetails.photoReplacementDetected ||
+        prev.tamperDetails.textManipulationDetected ||
+        (prev.hasVisa && prev.visaDetails && !prev.visaDetails.overallCrossCheckPassed);
+
+      if (isAlreadyCompromised) {
+        return {
+          ...prev,
+          liveTravelerPhotoUrl: bioUpdate.livePhotoUrl,
+          biometricDetails: {
+            ...prev.biometricDetails,
+            faceMatched: bioUpdate.faceMatched,
+            similarityScore: bioUpdate.similarityScore,
+            livenessVerified: true,
+          },
+          verdict: 'DETAIN',
+          riskScore: Math.max(prev.riskScore, 95),
+        };
+      }
+
       const newRiskScore = bioUpdate.faceMatched
         ? Math.min(prev.riskScore, 18)
         : Math.max(prev.riskScore, 88);
@@ -556,46 +772,75 @@ export default function Home() {
   const handleApplyAiResult = (aiData: any) => {
     if (!aiData) return;
     const isTampered = aiData.tamperDetected === true;
-    const riskScore = aiData.riskScore !== undefined ? aiData.riskScore : isTampered ? 84 : 14;
+    const isDuplicate = aiData.isDuplicate === true;
+    const isExpired = aiData.isExpired === true;
+    const isWrongDoc = aiData.isWrongDocType === true;
+    const isInvalidJurisdiction = aiData.isInvalidJurisdiction === true;
 
-    setCurrentResult((prev) => ({
-      ...prev,
-      extractedFields: {
-        ...prev.extractedFields,
-        fullName: aiData.extractedFields?.fullName || prev.extractedFields.fullName,
-        documentNumber: aiData.extractedFields?.documentNumber || prev.extractedFields.documentNumber,
-        nationality: aiData.extractedFields?.nationality || prev.extractedFields.nationality,
-        dateOfBirth: aiData.extractedFields?.dateOfBirth || prev.extractedFields.dateOfBirth,
-        expiryDate: aiData.extractedFields?.expiryDate || prev.extractedFields.expiryDate,
-        gender: aiData.extractedFields?.gender ? (aiData.extractedFields.gender.toUpperCase() === 'F' ? 'F' : 'M') : prev.extractedFields.gender,
-      },
-      tamperDetails: {
-        ...prev.tamperDetails,
-        photoReplacementDetected: isTampered,
-        textManipulationDetected: isTampered,
-        flaggedRegions: isTampered
-          ? [
-              {
-                field: 'Anomaly Detected',
-                description: aiData.anomalyDetails || 'AI flagged potential document manipulation.',
-                severity: 'HIGH',
-                box: { x: 25, y: 30, width: 45, height: 30 },
-              },
-            ]
-          : [],
-      },
-      icaoDetails: {
-        ...prev.icaoDetails,
-        overallIcaoCompliant: !isTampered,
-        notes: aiData.forensicObservations && aiData.forensicObservations.length > 0
-          ? aiData.forensicObservations
-          : prev.icaoDetails.notes,
-      },
-      riskScore: riskScore,
-      riskLevel: riskScore > 65 ? 'HIGH' : riskScore > 25 ? 'MEDIUM' : 'LOW',
-      verdict: (aiData.recommendedAction || (isTampered ? 'DETAIN' : 'CLEAR')) as any,
-      executiveSummary: aiData.reasoning || prev.executiveSummary,
-    }));
+    const isCompromised = isTampered || isDuplicate || isExpired || isWrongDoc || isInvalidJurisdiction;
+
+    let riskScore = 14;
+    if (isDuplicate) riskScore = 98;
+    else if (isExpired) riskScore = 96;
+    else if (isWrongDoc) riskScore = 95;
+    else if (isInvalidJurisdiction) riskScore = 94;
+    else if (aiData.riskScore !== undefined) riskScore = aiData.riskScore;
+    else if (isTampered) riskScore = 84;
+
+    setCurrentResult((prev) => {
+      const finalExpired = prev.isExpired || isExpired;
+      const finalDuplicate = prev.isDuplicateDocument || isDuplicate;
+      const finalWrongDoc = prev.isWrongDocumentType || isWrongDoc;
+      const finalJurisdiction = prev.isInvalidJurisdiction || isInvalidJurisdiction;
+      const finalCompromised = isCompromised || finalExpired || finalDuplicate || finalWrongDoc || finalJurisdiction || prev.verdict === 'DETAIN';
+
+      const finalVerdict = finalCompromised ? 'DETAIN' : (aiData.recommendedAction || 'CLEAR');
+      const finalRiskScore = finalCompromised ? Math.max(riskScore, prev.riskScore, 95) : riskScore;
+
+      return {
+        ...prev,
+        isExpired: finalExpired,
+        isDuplicateDocument: finalDuplicate,
+        isWrongDocumentType: finalWrongDoc,
+        isInvalidJurisdiction: finalJurisdiction,
+        extractedFields: {
+          ...prev.extractedFields,
+          fullName: aiData.extractedFields?.fullName || prev.extractedFields.fullName,
+          documentNumber: aiData.extractedFields?.documentNumber || prev.extractedFields.documentNumber,
+          nationality: aiData.extractedFields?.nationality || prev.extractedFields.nationality,
+          dateOfBirth: aiData.extractedFields?.dateOfBirth || prev.extractedFields.dateOfBirth,
+          expiryDate: aiData.extractedFields?.expiryDate || prev.extractedFields.expiryDate,
+          gender: aiData.extractedFields?.gender ? (aiData.extractedFields.gender.toUpperCase() === 'F' ? 'F' : 'M') : prev.extractedFields.gender,
+        },
+        tamperDetails: {
+          ...prev.tamperDetails,
+          photoReplacementDetected: isTampered,
+          textManipulationDetected: isTampered,
+          flaggedRegions: isTampered
+            ? [
+                {
+                  field: 'Anomaly Detected',
+                  description: aiData.anomalyDetails || 'AI flagged potential document manipulation.',
+                  severity: 'HIGH',
+                  box: { x: 25, y: 30, width: 45, height: 30 },
+                },
+              ]
+            : prev.tamperDetails.flaggedRegions,
+        },
+        icaoDetails: {
+          ...prev.icaoDetails,
+          expiryValid: !finalExpired && prev.icaoDetails.expiryValid,
+          overallIcaoCompliant: !finalCompromised && !isTampered,
+          notes: aiData.forensicObservations && aiData.forensicObservations.length > 0
+            ? aiData.forensicObservations
+            : prev.icaoDetails.notes,
+        },
+        riskScore: finalRiskScore,
+        riskLevel: finalRiskScore > 65 ? 'HIGH' : finalRiskScore > 25 ? 'MEDIUM' : 'LOW',
+        verdict: finalVerdict as any,
+        executiveSummary: aiData.reasoning || prev.executiveSummary,
+      };
+    });
   };
 
   return (

@@ -97,6 +97,12 @@ export interface VerificationResult {
   visaImageUrl?: string;
   visaDetails?: VisaVerificationDetails;
   aiAuditData?: any;
+  isExpired?: boolean;
+  expiryYearsExpired?: number;
+  isDuplicateDocument?: boolean;
+  isWrongDocumentType?: boolean;
+  isInvalidJurisdiction?: boolean;
+  securityAlertMessages?: string[];
 }
 
 export interface ScenarioPreset {

@@ -18,6 +18,13 @@ export default function ActionDock({ result, onResetTerminal }: Props) {
     setTimeout(() => setCleared(false), 5000);
   };
 
+  const handleDetain = () => {
+    const reasons = result.securityAlertMessages && result.securityAlertMessages.length > 0
+      ? result.securityAlertMessages.join('\n• ')
+      : result.executiveSummary;
+    alert(`🚨 CRITICAL SECURITY ALERT: DETENTION PROTOCOL ENGAGED\n\n• ${reasons}\n\nOutpost turnstiles locked. Interrogation officer notified.`);
+  };
+
   const handleExportPdf = () => {
     if (result.isTerminalBlank) {
       alert('Terminal is in blank standby state. Ingest traveler credentials before exporting dossier.');
@@ -71,7 +78,7 @@ export default function ActionDock({ result, onResetTerminal }: Props) {
               </div>
             ) : result.verdict === 'DETAIN' ? (
               <button
-                onClick={() => alert('CRITICAL ALERT: Detention protocol engaged. Outpost turnstiles locked.')}
+                onClick={handleDetain}
                 className="w-full py-2.5 rounded-lg text-xs font-black bg-rose-700 hover:bg-rose-800 active:bg-rose-900 text-white shadow-sm flex items-center justify-center gap-2 transition animate-pulse cursor-pointer"
               >
                 <ShieldAlert className="w-4 h-4 shrink-0" />
@@ -143,7 +150,7 @@ export default function ActionDock({ result, onResetTerminal }: Props) {
               </div>
             ) : result.verdict === 'DETAIN' ? (
               <button
-                onClick={() => alert('CRITICAL ALERT: Detention protocol engaged. Outpost turnstiles locked.')}
+                onClick={handleDetain}
                 className="px-4 py-2 rounded-lg text-xs font-black bg-rose-700 hover:bg-rose-800 text-white shadow-sm flex items-center gap-1.5 transition animate-pulse cursor-pointer shrink-0"
               >
                 <ShieldAlert className="w-4 h-4" />

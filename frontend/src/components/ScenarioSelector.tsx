@@ -91,26 +91,38 @@ export default function ScenarioSelector({
   };
 
   // Card 1: Document & Citizenship Integrity
-  const card1IsClear = !isTerminalBlank && (isIndianNational || !tamperDetails.photoReplacementDetected);
+  const card1IsWrongType = !isTerminalBlank && currentResult.isWrongDocumentType;
+  const card1IsClear = !isTerminalBlank && (isIndianNational || !tamperDetails.photoReplacementDetected) && !card1IsWrongType;
   const card1Title = isTerminalBlank 
     ? 'Valid Indian Passport' 
+    : card1IsWrongType
+    ? 'Visa Sticker in Passport Slot'
     : isIndianNational 
     ? 'Valid Indian Passport' 
     : `Foreign Passport (${extractedFields.nationality || 'INTL'})`;
   const card1Badge = isTerminalBlank 
     ? 'READY' 
+    : card1IsWrongType
+    ? 'DETAIN'
     : isIndianNational 
     ? 'CLEAR' 
     : 'FOREIGN ID';
   const card1Subtitle = isTerminalBlank 
     ? 'Awaiting Document Scan' 
+    : card1IsWrongType
+    ? 'INVALID (Passport Booklet Required)'
     : isIndianNational 
     ? 'CLEAR (Indian Citizen • Visa Exempt)' 
     : `FOREIGN NATIONAL (${extractedFields.nationality || 'INTL'})`;
 
   // Card 2: Text & Expiry Date Integrity
-  const card2IsForged = !isTerminalBlank && (tamperDetails.textManipulationDetected || !icaoDetails.expiryValid);
-  const card2Title = card2IsForged 
+  const card2IsExpired = !isTerminalBlank && (currentResult.isExpired || !icaoDetails.expiryValid);
+  const card2IsForged = !isTerminalBlank && (tamperDetails.textManipulationDetected || card2IsExpired);
+  const card2Title = isTerminalBlank
+    ? 'Text & Expiry Integrity'
+    : currentResult.isExpired
+    ? 'Document Expired'
+    : card2IsForged 
     ? 'Text-Forged Expiry Date' 
     : 'Text & Expiry Integrity';
   const card2Badge = isTerminalBlank 
@@ -120,6 +132,8 @@ export default function ScenarioSelector({
     : 'CLEAR';
   const card2Subtitle = isTerminalBlank 
     ? 'OCR & Checksum Engine' 
+    : currentResult.isExpired
+    ? `EXPIRED (${extractedFields.expiryDate || 'Past Date'})`
     : card2IsForged 
     ? 'FORGERY (Checksum Fail)' 
     : 'AUTHENTIC (Checksums Passed)';
@@ -145,6 +159,8 @@ export default function ScenarioSelector({
   // Card 4: Visa & Entry Authorization
   const card4IsIndian = isIndianNational;
   const card4NeedsVisa = requiresVisa && !hasVisa;
+  const card4IsDuplicate = !isTerminalBlank && currentResult.isDuplicateDocument;
+  const card4IsInvalidJurisdiction = !isTerminalBlank && currentResult.isInvalidJurisdiction;
   const card4HasStampAnomaly = hasVisa && tamperDetails.stampForgeryDetected;
   const card4HasMismatch = hasVisa && visaDetails && !visaDetails.overallCrossCheckPassed;
   
@@ -153,7 +169,15 @@ export default function ScenarioSelector({
   let card4Subtitle = 'Cross-Reconciliation Check';
 
   if (!isTerminalBlank) {
-    if (card4IsIndian) {
+    if (card4IsDuplicate) {
+      card4Title = 'Duplicate Specimen Fraud';
+      card4Badge = 'DETAIN';
+      card4Subtitle = 'FRAUD (Identical Upload)';
+    } else if (card4IsInvalidJurisdiction) {
+      card4Title = 'Foreign Jurisdiction Visa';
+      card4Badge = 'DETAIN';
+      card4Subtitle = 'REJECTED (US Visa at Indian Border)';
+    } else if (card4IsIndian) {
       card4Title = 'Visa Requirement: Exempt';
       card4Badge = 'EXEMPT';
       card4Subtitle = 'CLEAR (Indian Citizen)';

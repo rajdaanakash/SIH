@@ -31,59 +31,79 @@ export async function POST(req: NextRequest) {
     const geminiKey = resolveApiKey('GEMINI_API_KEY');
 
     const prompt = `You are a Senior Forensic Document & Immigration Security Examiner for the Sashastra Seema Bal (SSB), Ministry of Home Affairs, Government of India.
+Current Operating Date & Year: September 2026 (Year: 2026).
 Analyze the uploaded document(s) for border control immigration verification.
 ${visaImageBase64 ? 'NOTE: TWO DOCUMENTS ARE PROVIDED. Image 1 is the PRIMARY TRAVEL PASSPORT. Image 2 is the ENTRY VISA / CONSULAR ENDORSEMENT.' : 'NOTE: ONE DOCUMENT IS PROVIDED (Passport/National ID).'}
 
-STAGE 1: DOCUMENT PRE-VALIDATION & CLASSIFICATION (CRITICAL GATEKEEPER)
-Check if the uploaded image(s) are authentic GOVERNMENT-ISSUED IDENTITY OR TRAVEL DOCUMENTS (Passport, Visa, Aadhaar, National ID, Border Permit).
-- If ANY uploaded image is an ACADEMIC MARKSHEET (e.g. 8th/10th/12th marksheet, school certificate), BILL, RECEIPT, OR NON-IDENTITY PAPER:
-  You MUST immediately set:
-  "isValidIdentityDocument": false,
-  "detectedDocType": "INVALID_NON_IDENTITY_DOCUMENT",
-  "rejectionReason": "Uploaded file is identified as an academic marksheet or non-identity paper. SSB immigration terminals process only official Passports, Visas, and Government IDs."
+CRITICAL SECURITY GATEKEEPERS (ZERO-TOLERANCE RULES):
 
-STAGE 2: PRIMARY DOCUMENT OCR & FORENSICS (Only if isValidIdentityDocument is true)
-1. OCR & Field Extraction (for Passport/ID):
-   - Full Name
-   - Document Number (Passport #)
-   - Nationality (3-letter ISO code or country)
-   - Date of Birth (DD/MM/YYYY)
-   - Expiry Date (DD/MM/YYYY)
-   - Gender (M, F, or X)
-   - Issuing Country
-   - MRZ lines if present
+RULE 1: DUPLICATE SPECIMEN DETECTION
+- Compare Image 1 and Image 2. If BOTH images are identical or show the same document (e.g., the user uploaded the exact same document into both the Passport and Visa slots):
+  You MUST IMMEDIATELY set:
+  "isDuplicate": true,
+  "tamperDetected": true,
+  "recommendedAction": "DETAIN",
+  "riskScore": 98,
+  "reasoning": "FRAUD DETECTED: The exact same document specimen was uploaded for both Passport and Visa. An authentic separate national passport booklet and an official visa permit are required."
 
-2. Forensic Tamper Detection:
-   - Font Consistency: Check if any numbers, names, or dates were digitally altered.
-   - Photo Replacement: Look for cut-and-paste seams or pixel artifacts around the portrait.
-   - Security Laminate & Stamp: Check consistency of consulate/immigration seals.
-   - NOTE: If this is an authentic document photographed with a phone camera (ambient reflections, slight angle), do NOT falsely classify camera reflections as digital splicing.
+RULE 2: STRICT EXPIRATION VALIDATION (CURRENT YEAR IS 2026)
+- Check the "Expiry Date" or "Expiration Date" on the document(s).
+- If the expiry date is in the past relative to the current year 2026 (e.g. 2006, 2015, 2024, or any date before today):
+  You MUST IMMEDIATELY set:
+  "isExpired": true,
+  "tamperDetected": true,
+  "recommendedAction": "DETAIN",
+  "riskScore": 96,
+  "reasoning": "CRITICAL BORDER VIOLATION: Document is EXPIRED. Expiry date is in the past relative to 2026. Expired documents are strictly denied entry under Section 3 of the Passports (Entry into India) Act."
+
+RULE 3: PRIMARY TRAVEL DOCUMENT CLASSIFICATION
+- The document in Image 1 MUST be a Primary Travel Document (Passport booklet or National ID).
+- If Image 1 is actually a VISA STICKER / FOIL (for example, reads "VISA", "UNITED STATES OF AMERICA VISA", or MRZ starts with "V<" or "VN"):
+  You MUST set:
+  "isWrongDocType": true,
+  "detectedDocType": "VISA_STICKER_IN_PASSPORT_SLOT",
+  "recommendedAction": "DETAIN",
+  "riskScore": 95,
+  "reasoning": "INVALID PRIMARY DOCUMENT: A Visa foil/sticker was uploaded in the Passport slot. A national Passport booklet is mandatory."
+
+RULE 4: CONSULAR JURISDICTION (INDIAN BORDER CLEARANCE)
+- This is an Indian immigration checkpoint under the Ministry of Home Affairs, Government of India.
+- If the traveler presents a VISA issued by the "UNITED STATES OF AMERICA" or other foreign country:
+  A US Visa grants zero entry privileges into the Republic of India!
+  You MUST set:
+  "isInvalidJurisdiction": true,
+  "recommendedAction": "DETAIN",
+  "riskScore": 96,
+  "reasoning": "JURISDICTION VIOLATION: Uploaded Visa is a foreign visa (UNITED STATES OF AMERICA). Entering India requires an authentic Indian Entry Visa / e-Visa issued by the Government of India."
+
+STAGE 1: DOCUMENT PRE-VALIDATION & CLASSIFICATION
+Check if the uploaded image(s) are authentic GOVERNMENT-ISSUED IDENTITY OR TRAVEL DOCUMENTS.
+- If ANY uploaded image is an ACADEMIC MARKSHEET, BILL, RECEIPT, OR NON-IDENTITY PAPER:
+  Set "isValidIdentityDocument": false, "detectedDocType": "INVALID_NON_IDENTITY_DOCUMENT", "recommendedAction": "DETAIN", "riskScore": 95.
+
+STAGE 2: PRIMARY DOCUMENT OCR & FORENSICS
+1. Extract: Full Name, Document Number (Passport #), Nationality, Date of Birth, Expiry Date, Gender, Issuing Country, MRZ lines.
+2. Forensic Tamper: Check digital font alterations, photo replacement seams, substrate laminate security patterns.
 
 STAGE 3: NATIONALITY-BASED VISA RULES & CROSS-RECONCILIATION
-- If the primary document is an INDIAN PASSPORT (nationality IND or country India):
-  Traveler is entering their home country. Visa is EXEMPT. In forensicObservations, explicitly state: "Indian citizen holding authentic Indian passport. Visa verification is exempted under national entry protocol."
-- If the primary document is a FOREIGN PASSPORT (nationality is NOT IND):
-  Traveler is a foreign national entering India. An official Indian Entry Visa / Transit Permit is MANDATORY.
-  * If Visa is NOT provided: In forensicObservations, note that passenger is a foreign citizen and requires an Indian Entry Visa before clearance can be granted.
-  * If Visa IS provided:
-    1. Extract visaNumber, passportNumberLinked, visaType, stayDurationDays, entryValidity, validFrom, validUntil, issuingPost.
-    2. Cross-Verification Rules:
-       - CRITICAL: Check if passportNumberLinked on the Visa exactly matches the Passport Number on Image 1. If they do not match, set passportMatched = false, tamperDetected = true, recommendedAction = "DETAIN".
-       - Check if Traveler Name on Visa matches Passport Name.
-       - Check if Nationality on Visa matches Passport.
-       - Check if Visa validUntil is before Passport Expiry Date.
-       - Set overallCrossCheckPassed to true if all match, false otherwise.
+- If Indian Passport: Visa is EXEMPT.
+- If Foreign Passport: An Indian Entry Visa is MANDATORY.
+  * If Visa is provided: Extract visaNumber, passportNumberLinked, visaType, stayDurationDays, entryValidity, validFrom, validUntil, issuingPost.
+  * Cross-check passportNumberLinked on the Visa with the Passport Number on Image 1. If mismatch -> recommendedAction = "DETAIN".
 
 STAGE 4: FINAL VERDICT & COMPOSITE SCORING
-- If genuine Indian passport OR genuine foreign passport with matching valid Visa: tamperDetected = false, recommendedAction = "CLEAR", riskScore between 8 and 20.
-- If foreign passport without visa: recommendedAction = "SECONDARY_INSPECTION", riskScore between 45 and 55, reasoning = "Foreign national passport verified. Entry visa required to complete border clearance."
-- If stamp anomaly or minor ambiguity on visa: tamperDetected = false, recommendedAction = "SECONDARY_INSPECTION", riskScore between 45 and 60.
-- If photo replaced, text altered, or Passport-Visa mismatch: tamperDetected = true, recommendedAction = "DETAIN", riskScore between 75 and 95.
+- If isDuplicate OR isExpired OR isWrongDocType OR isInvalidJurisdiction: recommendedAction = "DETAIN", riskScore >= 95.
+- If genuine Indian passport OR genuine foreign passport with valid, matching, unexpired Indian Visa: recommendedAction = "CLEAR", riskScore between 8 and 20.
+- If foreign passport without visa: recommendedAction = "SECONDARY_INSPECTION", riskScore 48.
 
-Return ONLY a valid JSON object matching this schema (no markdown formatting, no backticks outside JSON):
+Return ONLY a valid JSON object matching this schema:
 {
   "isValidIdentityDocument": true,
   "detectedDocType": "PASSPORT",
+  "isDuplicate": false,
+  "isExpired": false,
+  "isWrongDocType": false,
+  "isInvalidJurisdiction": false,
   "rejectionReason": "",
   "isLiveAi": true,
   "extractedFields": {
