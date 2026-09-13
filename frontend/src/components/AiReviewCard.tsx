@@ -126,23 +126,40 @@ export default function AiReviewCard({ result, onApplyAiResult }: Props) {
           </div>
         </div>
 
-        <button
-          onClick={handleRunAiAudit}
-          disabled={loading}
-          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-[#0A2540] hover:bg-[#081e35] text-white shadow-xs transition disabled:opacity-50 cursor-pointer"
-        >
-          {loading ? (
-            <>
-              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-              <span>Analyzing Document...</span>
-            </>
-          ) : (
-            <>
-              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>Run Live AI Audit</span>
-            </>
+        <div className="flex items-center gap-2">
+          {activeAnalysis && (
+            <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-300">
+              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+              <span>Auto-Executed on Upload</span>
+            </span>
           )}
-        </button>
+          <button
+            onClick={handleRunAiAudit}
+            disabled={loading || result.isTerminalBlank}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition shadow-xs ${
+              result.isTerminalBlank
+                ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+                : 'bg-[#0A2540] hover:bg-[#081e35] text-white cursor-pointer'
+            }`}
+          >
+            {loading ? (
+              <>
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                <span>Screening Telemetry...</span>
+              </>
+            ) : result.isTerminalBlank ? (
+              <>
+                <Cpu className="w-3.5 h-3.5 text-slate-400" />
+                <span>Autonomous Standby</span>
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-3.5 h-3.5 text-blue-300" />
+                <span>Re-Audit Specimen</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {activeAnalysis ? (
@@ -203,8 +220,8 @@ export default function AiReviewCard({ result, onApplyAiResult }: Props) {
             <Cpu className="w-4 h-4 text-[#0A2540] shrink-0" />
             <span>
               {result.isTerminalBlank
-                ? 'Terminal Ready: Multimodal AI audit will execute automatically upon Passport & Visa ingestion.'
-                : 'Click "Run Live AI Audit" to execute deep multimodal reasoning on the document specimen.'}
+                ? 'Autonomous Standby: Multimodal AI audit will execute automatically upon Passport & Visa ingestion.'
+                : 'Autonomous AI Review active: Processing document telemetry in real-time.'}
             </span>
           </div>
         </div>

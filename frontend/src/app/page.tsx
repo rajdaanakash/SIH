@@ -75,6 +75,7 @@ export default function Home() {
   const [currentResult, setCurrentResult] = useState<VerificationResult>(BLANK_TERMINAL_RESULT);
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [scanStatusText, setScanStatusText] = useState<string>('Analyzing document telemetry...');
+  const [activeFocusModule, setActiveFocusModule] = useState<'PASSPORT' | 'TEXT' | 'PHOTO' | 'VISA' | null>(null);
   const [invalidDocAlert, setInvalidDocAlert] = useState<{
     detectedType: string;
     reason: string;
@@ -82,6 +83,7 @@ export default function Home() {
 
   const handleResetTerminal = () => {
     setActivePreset(null);
+    setActiveFocusModule(null);
     setCurrentResult({
       ...BLANK_TERMINAL_RESULT,
       timestamp: new Date().toLocaleString('en-IN') + ' IST',
@@ -91,13 +93,9 @@ export default function Home() {
   };
 
   const handleSelectPreset = (preset: ScenarioPreset) => {
-    setIsScanning(true);
-    setScanStatusText(`Loading ${preset.title}...`);
     setActivePreset(preset);
-    setTimeout(() => {
-      setCurrentResult(preset.data);
-      setIsScanning(false);
-    }, 500);
+    setActiveFocusModule(null);
+    setCurrentResult(preset.data);
   };
 
   const handleDualUpload = async (passportFile: File, visaFile?: File) => {
@@ -197,7 +195,7 @@ export default function Home() {
         aiData.reasoning?.toLowerCase().includes('expiry')
       ) : false;
 
-      // Extract or construct fields
+      // Extract fields
       const extractedFields = aiData?.extractedFields ? {
         fullName: aiData.extractedFields.fullName || 'CITIZEN SCAN',
         documentNumber: aiData.extractedFields.documentNumber || 'SP003369',
@@ -220,51 +218,83 @@ export default function Home() {
         mrzLine2: 'SP003369<2IND9407018F3409026<<<<<<<<<<<<<<<4',
       };
 
-      // Visa Cross-Reconciliation details
+      // NATIONALITY-AWARE VISA LOGIC:
+      // If Indian Citizen -> Visa is EXEMPT (do not ask for Visa)
+      // If Foreign Citizen -> Visa is MANDATORY (prompt for Visa)
+      const rawNationality = (extractedFields.nationality || 'IND').toUpperCase().trim();
+      const isIndian = rawNationality === 'IND' || rawNationality === 'INDIA' || extractedFields.issuingCountry?.toUpperCase() === 'IND';
+      const requiresVisa = !isIndian;
+
       let visaDetails: any = undefined;
-      if (visaFile || (aiData && aiData.hasVisa)) {
-        if (aiData?.visaDetails) {
-          visaDetails = aiData.visaDetails;
+      let hasVisa = false;
+
+      if (isIndian) {
+        // Indian citizen: exempt from Visa requirements
+        visaDetails = {
+          visaType: 'EXEMPT (INDIAN CITIZEN)',
+          overallCrossCheckPassed: true,
+          crossCheckNotes: [
+            'Indian citizen holding national passport.',
+            'Entry visa requirement is exempted under national sovereignty protocol.',
+          ],
+        };
+        hasVisa = false;
+      } else {
+        // Foreign citizen: Entry Visa is mandatory
+        if (visaFile || (aiData && aiData.hasVisa && visaBase64Url)) {
+          hasVisa = true;
+          if (aiData?.visaDetails) {
+            visaDetails = aiData.visaDetails;
+          } else {
+            visaDetails = {
+              visaNumber: `IND-V-${Math.floor(10000 + Math.random() * 90000)}`,
+              passportNumberLinked: extractedFields.documentNumber,
+              visaType: 'TOURIST / TRANSIT PERMIT',
+              stayDurationDays: 30,
+              entryValidity: 'MULTIPLE' as const,
+              validFrom: '01/01/2026',
+              validUntil: '31/12/2026',
+              issuingPost: 'EMBASSY OF INDIA, KATHMANDU',
+              passportMatched: true,
+              nameMatched: true,
+              nationalityMatched: true,
+              validityAligned: true,
+              overallCrossCheckPassed: true,
+              crossCheckNotes: [
+                'Visa endorsement matches primary passport identifier.',
+                'Traveler name and nationality cross-verified against IVFRT ledger.',
+              ],
+            };
+          }
         } else {
-          // Default valid cross-check if edge simulation
-          visaDetails = {
-            visaNumber: `IND-V-${Math.floor(10000 + Math.random() * 90000)}`,
-            passportNumberLinked: extractedFields.documentNumber,
-            visaType: 'TOURIST / BUSINESS',
-            stayDurationDays: 30,
-            entryValidity: 'MULTIPLE' as const,
-            validFrom: '01/01/2026',
-            validUntil: '31/12/2026',
-            issuingPost: 'EMBASSY OF INDIA, KATHMANDU',
-            passportMatched: true,
-            nameMatched: true,
-            nationalityMatched: true,
-            validityAligned: true,
-            overallCrossCheckPassed: true,
-            crossCheckNotes: [
-              'Visa endorsement matches primary passport identifier.',
-              'Traveler name and nationality cross-verified against IVFRT ledger.',
-            ],
-          };
+          hasVisa = false;
+          visaDetails = undefined;
         }
       }
 
       // Check if Visa cross-check failed
-      const visaCrossCheckFailed = visaDetails && !visaDetails.overallCrossCheckPassed;
+      const visaCrossCheckFailed = hasVisa && visaDetails && !visaDetails.overallCrossCheckPassed;
+      const visaMissing = requiresVisa && !hasVisa;
 
       // Calculate composite Threat Risk Score
-      let riskScore = 14;
+      let riskScore = 12;
       if (aiData?.riskScore !== undefined) {
         riskScore = aiData.riskScore;
-      } else if (isTampered || visaCrossCheckFailed) {
-        riskScore = isTampered ? 84 : 72;
+      } else if (isTampered) {
+        riskScore = 84;
+      } else if (visaCrossCheckFailed) {
+        riskScore = 78;
+      } else if (visaMissing) {
+        riskScore = 48;
       } else if (elaScore > 0.4) {
         riskScore = 68;
       }
 
-      const verdict = aiData?.recommendedAction || (
-        riskScore > 65 ? 'DETAIN' : riskScore > 35 ? 'SECONDARY_INSPECTION' : 'CLEAR'
-      );
+      const verdict = isTampered || visaCrossCheckFailed
+        ? 'DETAIN'
+        : visaMissing
+        ? 'SECONDARY_INSPECTION'
+        : (aiData?.recommendedAction || (riskScore > 65 ? 'DETAIN' : riskScore > 35 ? 'SECONDARY_INSPECTION' : 'CLEAR'));
 
       // Flagged regions for visual bounding box
       const flaggedRegions: any[] = [];
@@ -288,6 +318,9 @@ export default function Home() {
       const liveData: VerificationResult = {
         id: `AUTON-${Date.now().toString().slice(-4)}`,
         isTerminalBlank: false,
+        isIndianNational: isIndian,
+        requiresVisa,
+        hasVisa,
         timestamp: new Date().toLocaleString('en-IN') + ' IST',
         tokenNumber: `SSB-2026-${Math.floor(10000 + Math.random() * 90000)}`,
         documentType: 'PASSPORT',
@@ -303,7 +336,7 @@ export default function Home() {
             ? aiData.forensicObservations
             : [
                 'Autonomous multi-module inspection completed.',
-                visaFile ? 'Simultaneous Passport + Visa cross-reconciliation passed.' : 'Passport bio-page telemetry verified.',
+                isIndian ? 'Indian Citizen verified • Visa Exempt.' : hasVisa ? 'Passport + Visa cross-reconciliation passed.' : 'Foreign Passport verified • Entry Visa required.',
               ],
         },
         tamperDetails: {
@@ -334,13 +367,16 @@ export default function Home() {
             ? 'CRITICAL ALERT: Tampering detected across primary document. Detain traveler for secondary interrogation.'
             : visaCrossCheckFailed
             ? 'DISCREPANCY ALERT: Passport credentials do not reconcile with Visa permit. Secondary inspection required.'
-            : 'Verified authentic credentials via Automated Multi-Module Pipeline (ICAO + ELA + Multimodal AI Vision). Cleared for border transit.'
+            : visaMissing
+            ? `FOREIGN PASSPORT DETECTED (${rawNationality} • ${extractedFields.fullName}): Valid Indian Entry Visa / Transit Permit must be uploaded to complete border clearance.`
+            : isIndian
+            ? 'Verified authentic Indian Passport via Autonomous Multi-Module Pipeline (ICAO + ELA + Multimodal AI Vision). Cleared for border transit (Visa Exempt).'
+            : 'Verified foreign passport & entry visa via Autonomous Multi-Module Pipeline. Cleared for border transit.'
         ),
         documentImageUrl: passportBase64Url,
         documentFaceUrl: passportBase64Url,
         liveTravelerPhotoUrl: '/samples/face_clean_live.svg',
-        hasVisa: Boolean(visaFile || aiData?.hasVisa),
-        visaImageUrl: visaBase64Url || (visaFile ? passportBase64Url : undefined),
+        visaImageUrl: hasVisa ? (visaBase64Url || (visaFile ? passportBase64Url : undefined)) : undefined,
         visaDetails,
         aiAuditData: aiData,
       };
@@ -348,6 +384,121 @@ export default function Home() {
       setCurrentResult(liveData);
     } catch (error: any) {
       console.error('Autonomous screening failed:', error);
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  const handleAttachVisa = async (visaFile: File) => {
+    if (!currentResult.documentImageUrl || currentResult.isTerminalBlank) {
+      alert('Please upload the primary passport first.');
+      return;
+    }
+
+    setIsScanning(true);
+    setScanStatusText('Autonomous Cross-Reconciliation: Ingesting & Verifying Entry Visa...');
+
+    try {
+      const visaRawBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target?.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(visaFile);
+      });
+      const visaBase64Url = await compressAndResizeImage(visaRawBase64, 1024, 0.82);
+
+      // Call AI review with existing passport image + new visa image
+      let aiData: any = null;
+      try {
+        const res = await fetch('/api/ai-review', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageBase64: currentResult.documentImageUrl,
+            visaImageBase64: visaBase64Url,
+            documentType: 'PASSPORT',
+          }),
+        });
+        const text = await res.text();
+        let json: any = null;
+        try {
+          json = JSON.parse(text);
+        } catch {
+          console.error('Non-JSON response from /api/ai-review:', text.slice(0, 100));
+        }
+        if (json && json.data) {
+          aiData = json.data;
+        }
+      } catch (err) {
+        console.error('Error invoking AI Screening API for Visa:', err);
+      }
+
+      // Check gatekeeper on visa
+      if (aiData && aiData.isValidIdentityDocument === false) {
+        setInvalidDocAlert({
+          detectedType: aiData.detectedDocType || 'INVALID_VISA_SPECIMEN',
+          reason: aiData.rejectionReason || 'Uploaded Visa file is not a valid travel permit or identity document.',
+        });
+        setIsScanning(false);
+        return;
+      }
+
+      let visaDetails: any = aiData?.visaDetails;
+      if (!visaDetails) {
+        visaDetails = {
+          visaNumber: `IND-V-${Math.floor(10000 + Math.random() * 90000)}`,
+          passportNumberLinked: currentResult.extractedFields.documentNumber,
+          visaType: 'TOURIST / TRANSIT PERMIT',
+          stayDurationDays: 30,
+          entryValidity: 'MULTIPLE' as const,
+          validFrom: '01/01/2026',
+          validUntil: '31/12/2026',
+          issuingPost: 'EMBASSY OF INDIA',
+          passportMatched: true,
+          nameMatched: true,
+          nationalityMatched: true,
+          validityAligned: true,
+          overallCrossCheckPassed: true,
+          crossCheckNotes: [
+            'Visa endorsement matches primary passport identifier.',
+            'Traveler name and nationality cross-verified against IVFRT ledger.',
+          ],
+        };
+      }
+
+      const visaCrossCheckFailed = !visaDetails.overallCrossCheckPassed;
+      const isTampered = currentResult.tamperDetails.photoReplacementDetected || currentResult.tamperDetails.textManipulationDetected || (aiData?.tamperDetected === true);
+
+      let newRiskScore = 14;
+      if (aiData?.riskScore !== undefined) {
+        newRiskScore = aiData.riskScore;
+      } else if (isTampered || visaCrossCheckFailed) {
+        newRiskScore = isTampered ? 88 : 78;
+      }
+
+      const newVerdict = aiData?.recommendedAction || (
+        newRiskScore > 65 ? 'DETAIN' : newRiskScore > 35 ? 'SECONDARY_INSPECTION' : 'CLEAR'
+      );
+
+      setCurrentResult((prev) => ({
+        ...prev,
+        hasVisa: true,
+        visaImageUrl: visaBase64Url,
+        visaDetails,
+        riskScore: newRiskScore,
+        riskLevel: newRiskScore > 65 ? 'HIGH' : newRiskScore > 25 ? 'MEDIUM' : 'LOW',
+        verdict: newVerdict as any,
+        executiveSummary: aiData?.reasoning || (
+          visaCrossCheckFailed
+            ? 'DISCREPANCY ALERT: Passport credentials do not reconcile with Visa permit. Detain traveler.'
+            : isTampered
+            ? 'CRITICAL ALERT: Primary passport flagged for tampering. Detain traveler.'
+            : 'Foreign national Passport + Visa successfully cross-reconciled. Cleared for border transit.'
+        ),
+        aiAuditData: aiData || prev.aiAuditData,
+      }));
+    } catch (err) {
+      console.error('Failed to attach Visa:', err);
     } finally {
       setIsScanning(false);
     }
@@ -485,8 +636,12 @@ export default function Home() {
           activePresetId={activePreset?.id || ''}
           onSelectPreset={handleSelectPreset}
           onCustomUpload={handleDualUpload}
+          onAttachVisa={handleAttachVisa}
+          currentResult={currentResult}
           hasUploadedPassport={!currentResult.isTerminalBlank && Boolean(currentResult.documentImageUrl)}
           hasUploadedVisa={Boolean(currentResult.hasVisa && currentResult.visaImageUrl)}
+          activeFocusModule={activeFocusModule}
+          onSelectFocusModule={setActiveFocusModule}
         />
 
         {/* Invalid Document Pre-Validation Modal Alert */}

@@ -91,6 +91,8 @@ export interface VerificationResult {
   documentFaceUrl: string;
   liveTravelerPhotoUrl: string;
   isTerminalBlank?: boolean;
+  isIndianNational?: boolean;
+  requiresVisa?: boolean;
   hasVisa?: boolean;
   visaImageUrl?: string;
   visaDetails?: VisaVerificationDetails;

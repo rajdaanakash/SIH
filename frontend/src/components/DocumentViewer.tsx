@@ -23,15 +23,23 @@ export default function DocumentViewer({ result }: Props) {
       {/* Top Header: Document Identifier & Mode Switcher */}
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <div>
-          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 flex-wrap">
             <span>{activeDocTab === 'VISA' ? 'ENTRY VISA SPECIMEN' : `${result.documentType} SPECIMEN`}</span>
             <span>•</span>
             <span>TRANSIT TOKEN</span>
-            {hasVisa && (
+            {result.isIndianNational ? (
+              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
+                INDIAN CITIZEN (VISA EXEMPT)
+              </span>
+            ) : hasVisa ? (
               <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
                 DUAL DOC (PASSPORT+VISA)
               </span>
-            )}
+            ) : result.requiresVisa ? (
+              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300">
+                FOREIGN ({result.extractedFields.nationality || 'INTL'}) • VISA REQUIRED
+              </span>
+            ) : null}
           </div>
           <div className="text-sm sm:text-base font-black text-slate-900 font-mono">
             #{result.tokenNumber}

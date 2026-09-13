@@ -59,25 +59,25 @@ STAGE 2: PRIMARY DOCUMENT OCR & FORENSICS (Only if isValidIdentityDocument is tr
    - Security Laminate & Stamp: Check consistency of consulate/immigration seals.
    - NOTE: If this is an authentic document photographed with a phone camera (ambient reflections, slight angle), do NOT falsely classify camera reflections as digital splicing.
 
-${visaImageBase64 ? `STAGE 3: VISA EXTRACTION & PASSPORT ↔ VISA CROSS-RECONCILIATION
-1. Extract Visa Fields (from Image 2):
-   - visaNumber
-   - passportNumberLinked (the Passport Number printed on the Visa)
-   - visaType (e.g., TOURIST, BUSINESS, EMPLOYMENT, TRANSIT PERMIT)
-   - stayDurationDays (e.g., 30, 90, 180)
-   - entryValidity (SINGLE, MULTIPLE, DOUBLE)
-   - validFrom, validUntil
-   - issuingPost
-2. Cross-Verification Rules:
-   - CRITICAL: Check if passportNumberLinked on the Visa exactly matches the Passport Number on Image 1. If they do not match, set passportMatched = false, tamperDetected = true, recommendedAction = "DETAIN".
-   - Check if the Traveler Name on Visa matches Passport Name.
-   - Check if Nationality on Visa matches Passport.
-   - Check if Visa validUntil is before Passport Expiry Date.
-   - Set overallCrossCheckPassed to true if all match, false otherwise.` : ''}
+STAGE 3: NATIONALITY-BASED VISA RULES & CROSS-RECONCILIATION
+- If the primary document is an INDIAN PASSPORT (nationality IND or country India):
+  Traveler is entering their home country. Visa is EXEMPT. In forensicObservations, explicitly state: "Indian citizen holding authentic Indian passport. Visa verification is exempted under national entry protocol."
+- If the primary document is a FOREIGN PASSPORT (nationality is NOT IND):
+  Traveler is a foreign national entering India. An official Indian Entry Visa / Transit Permit is MANDATORY.
+  * If Visa is NOT provided: In forensicObservations, note that passenger is a foreign citizen and requires an Indian Entry Visa before clearance can be granted.
+  * If Visa IS provided:
+    1. Extract visaNumber, passportNumberLinked, visaType, stayDurationDays, entryValidity, validFrom, validUntil, issuingPost.
+    2. Cross-Verification Rules:
+       - CRITICAL: Check if passportNumberLinked on the Visa exactly matches the Passport Number on Image 1. If they do not match, set passportMatched = false, tamperDetected = true, recommendedAction = "DETAIN".
+       - Check if Traveler Name on Visa matches Passport Name.
+       - Check if Nationality on Visa matches Passport.
+       - Check if Visa validUntil is before Passport Expiry Date.
+       - Set overallCrossCheckPassed to true if all match, false otherwise.
 
 STAGE 4: FINAL VERDICT & COMPOSITE SCORING
-- If genuine & all cross-checks pass: tamperDetected = false, recommendedAction = "CLEAR", riskScore between 8 and 20.
-- If stamp anomaly or minor ambiguity: tamperDetected = false, recommendedAction = "SECONDARY_INSPECTION", riskScore between 45 and 60.
+- If genuine Indian passport OR genuine foreign passport with matching valid Visa: tamperDetected = false, recommendedAction = "CLEAR", riskScore between 8 and 20.
+- If foreign passport without visa: recommendedAction = "SECONDARY_INSPECTION", riskScore between 45 and 55, reasoning = "Foreign national passport verified. Entry visa required to complete border clearance."
+- If stamp anomaly or minor ambiguity on visa: tamperDetected = false, recommendedAction = "SECONDARY_INSPECTION", riskScore between 45 and 60.
 - If photo replaced, text altered, or Passport-Visa mismatch: tamperDetected = true, recommendedAction = "DETAIN", riskScore between 75 and 95.
 
 Return ONLY a valid JSON object matching this schema (no markdown formatting, no backticks outside JSON):

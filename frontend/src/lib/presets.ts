@@ -58,6 +58,8 @@ export const SCENARIO_PRESETS: ScenarioPreset[] = [
       documentImageUrl: '/samples/passport_clean.svg',
       documentFaceUrl: '/samples/face_clean_doc.svg',
       liveTravelerPhotoUrl: '/samples/face_clean_live.svg',
+      isIndianNational: true,
+      requiresVisa: false,
     },
   },
   {
@@ -134,13 +136,15 @@ export const SCENARIO_PRESETS: ScenarioPreset[] = [
       documentImageUrl: '/samples/passport_tampered_expiry.svg',
       documentFaceUrl: '/samples/face_clean_doc.svg',
       liveTravelerPhotoUrl: '/samples/face_clean_doc.svg',
+      isIndianNational: true,
+      requiresVisa: false,
     },
   },
   {
     id: 'photo-replaced',
-    title: 'Photo-Replaced Impersonation (High Risk)',
+    title: 'Photo-Replaced Impersonation (Stolen)',
     badge: 'IMPERSONATION (Face Mismatch)',
-    description: 'Imposter pasted a new photo over a stolen passport. Boundary cut-and-paste seam detected and 1:1 facial biometric match fails.',
+    description: 'Imposter replaced the original photograph. AI facial similarity failed (34.2%). Watchlist hit: Interpol SLTD database record.',
     data: {
       id: 'DOC-2026-003',
       timestamp: '2026-09-12 19:35:10 IST',
@@ -148,14 +152,14 @@ export const SCENARIO_PRESETS: ScenarioPreset[] = [
       documentType: 'PASSPORT',
       extractedFields: {
         fullName: 'AMIT ROY',
-        documentNumber: 'T7819034',
+        documentNumber: 'P8910245',
         nationality: 'IND',
-        dateOfBirth: '22/03/1988',
-        expiryDate: '21/03/2028',
+        dateOfBirth: '23/04/1988',
+        expiryDate: '22/04/2032',
         gender: 'M',
         issuingCountry: 'IND',
         mrzLine1: 'P<INDROY<<AMIT<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<',
-        mrzLine2: 'T7819034<5IND8803221M2803213<<<<<<<<<<<<<<<1',
+        mrzLine2: 'P8910245<5IND8804239M3204225<<<<<<<<<<<<<<<8',
       },
       icaoDetails: {
         documentNumberValid: true,
@@ -164,13 +168,13 @@ export const SCENARIO_PRESETS: ScenarioPreset[] = [
         compositeValid: true,
         rawAlgorithm: 'ICAO Doc 9303 Part 3/7 (Modulus 10, 7-3-1 weights)',
         overallIcaoCompliant: true,
-        notes: ['Raw text and MRZ checksums passed.'],
+        notes: ['ICAO checksums mathematically intact.'],
       },
       tamperDetails: {
         photoReplacementDetected: true,
         photoSeamConfidence: 0.94,
         textManipulationDetected: false,
-        fontInconsistencyScore: 0.06,
+        fontInconsistencyScore: 0.08,
         stampForgeryDetected: false,
         stampCircularityAnomaly: 0.04,
         elaAnomalyScore: 0.92,
@@ -201,6 +205,8 @@ export const SCENARIO_PRESETS: ScenarioPreset[] = [
       documentImageUrl: '/samples/passport_photo_replaced.svg',
       documentFaceUrl: '/samples/face_imposter_doc.svg',
       liveTravelerPhotoUrl: '/samples/face_clean_live.svg',
+      isIndianNational: true,
+      requiresVisa: false,
     },
   },
   {
@@ -288,7 +294,9 @@ export const SCENARIO_PRESETS: ScenarioPreset[] = [
           'Traveler credentials match between Passport and Visa Permit.',
           'WARNING: Visa endorsement stamp displays physical distortion / circularity anomaly.'
         ]
-      }
+      },
+      isIndianNational: false,
+      requiresVisa: true,
     },
   },
 ];
