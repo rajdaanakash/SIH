@@ -25,36 +25,39 @@ export default function DocumentViewer({ result }: Props) {
           </div>
         </div>
 
-        <div className="inline-flex rounded-lg p-1 bg-slate-100 border border-slate-200 text-xs">
+        <div className="inline-flex rounded-lg p-0.5 sm:p-1 bg-slate-100 border border-slate-200 text-[11px] sm:text-xs">
           <button
             onClick={() => setViewMode('FORENSIC')}
-            className={`px-3 py-1 rounded-md font-bold transition cursor-pointer ${
+            className={`px-2 sm:px-3 py-1 rounded-md font-bold transition cursor-pointer ${
               viewMode === 'FORENSIC'
                 ? 'bg-[#0a2540] text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            Forensic Bounding Boxes
+            <span className="sm:hidden">Forensic</span>
+            <span className="hidden sm:inline">Forensic Boxes</span>
           </button>
           <button
             onClick={() => setViewMode('ELA')}
-            className={`px-3 py-1 rounded-md font-bold transition cursor-pointer ${
+            className={`px-2 sm:px-3 py-1 rounded-md font-bold transition cursor-pointer ${
               viewMode === 'ELA'
                 ? 'bg-purple-700 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            ELA Tamper Heatmap
+            <span className="sm:hidden">ELA Map</span>
+            <span className="hidden sm:inline">ELA Heatmap</span>
           </button>
           <button
             onClick={() => setViewMode('PLAIN')}
-            className={`px-3 py-1 rounded-md font-bold transition cursor-pointer ${
+            className={`px-2 sm:px-3 py-1 rounded-md font-bold transition cursor-pointer ${
               viewMode === 'PLAIN'
                 ? 'bg-slate-800 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            Plain Scan
+            <span className="sm:hidden">Plain</span>
+            <span className="hidden sm:inline">Plain Scan</span>
           </button>
         </div>
       </div>

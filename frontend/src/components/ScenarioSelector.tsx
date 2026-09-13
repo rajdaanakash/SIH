@@ -22,26 +22,28 @@ export default function ScenarioSelector({ activePresetId, onSelectPreset, onCus
 
   return (
     <div className="bg-white rounded-xl p-3.5 sm:p-4 shadow-xs border border-slate-200">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-md bg-blue-50 border border-blue-200 flex items-center justify-center">
+      <div className="flex items-center justify-between gap-2 mb-2.5 sm:mb-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-6 h-6 rounded-md bg-blue-50 border border-blue-200 flex items-center justify-center shrink-0">
             <Sparkles className="w-3.5 h-3.5 text-blue-900" />
           </div>
-          <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-900 block">
-              Border Evaluation Test Scenarios (SIH Module 1)
+          <div className="min-w-0">
+            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-900 block truncate">
+              <span className="sm:hidden">Border Test Profiles</span>
+              <span className="hidden sm:inline">Border Evaluation Test Scenarios (SIH Module 1)</span>
             </span>
-            <span className="text-[10px] text-slate-500 block">
+            <span className="text-[10px] text-slate-500 hidden sm:block truncate">
               Select an official border screening profile or upload custom travel credential
             </span>
           </div>
         </div>
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 transition cursor-pointer shadow-2xs"
+          className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 transition cursor-pointer shadow-2xs shrink-0"
         >
           <Upload className="w-3.5 h-3.5 text-blue-800" />
-          <span>Upload Custom ID</span>
+          <span className="sm:hidden">Upload</span>
+          <span className="hidden sm:inline">Upload Custom ID</span>
         </button>
         <input
           ref={fileInputRef}
@@ -52,7 +54,7 @@ export default function ScenarioSelector({ activePresetId, onSelectPreset, onCus
         />
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
         {SCENARIO_PRESETS.map((preset) => {
           const isActive = preset.id === activePresetId;
           const isClear = preset.data.riskLevel === 'LOW';
@@ -62,7 +64,7 @@ export default function ScenarioSelector({ activePresetId, onSelectPreset, onCus
             <button
               key={preset.id}
               onClick={() => onSelectPreset(preset)}
-              className={`text-left p-3 rounded-xl border text-xs transition relative flex flex-col justify-between cursor-pointer ${
+              className={`text-left p-2.5 sm:p-3 rounded-xl border text-xs transition relative flex flex-col justify-between cursor-pointer ${
                 isActive
                   ? 'bg-blue-50/90 border-blue-600 text-blue-950 shadow-xs ring-1 ring-blue-500'
                   : 'bg-[#fafafa] hover:bg-slate-100 border-slate-200 hover:border-slate-300 text-slate-800'
@@ -70,14 +72,14 @@ export default function ScenarioSelector({ activePresetId, onSelectPreset, onCus
             >
               <div className="flex items-center justify-between mb-1.5">
                 {isClear ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-700 shrink-0" />
                 ) : isMedium ? (
-                  <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+                  <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-700 shrink-0" />
                 ) : (
-                  <AlertOctagon className="w-4 h-4 text-rose-700 shrink-0" />
+                  <AlertOctagon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-700 shrink-0" />
                 )}
                 <span
-                  className={`text-[9.5px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                  className={`text-[8.5px] sm:text-[9.5px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider ${
                     isClear
                       ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
                       : isMedium
@@ -88,10 +90,10 @@ export default function ScenarioSelector({ activePresetId, onSelectPreset, onCus
                   {preset.data.verdict}
                 </span>
               </div>
-              <div className="font-bold text-slate-900 line-clamp-1 text-[11.5px]">
-                {preset.title.split('(')[0]}
+              <div className="font-bold text-slate-900 truncate text-[11px] sm:text-[11.5px]">
+                {preset.title.split('(')[0].trim()}
               </div>
-              <div className="text-[10px] text-slate-500 font-medium line-clamp-1 mt-0.5">
+              <div className="text-[9.5px] sm:text-[10px] text-slate-500 font-medium truncate mt-0.5">
                 {preset.badge}
               </div>
             </button>

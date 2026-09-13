@@ -19,28 +19,29 @@ export default function Header() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-40 shadow-md">
+    <header className="relative sm:sticky sm:top-0 z-40 shadow-xs">
       {/* 1. Official GIGW (Guidelines for Indian Government Websites) Top Bar */}
       <div className="bg-slate-100 border-b border-slate-200 text-[11px] text-slate-700 px-3 sm:px-6 py-1">
-        <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2">
+        <div className="max-w-6xl mx-auto flex items-center justify-between gap-2">
           {/* Left: Country & Ministry Identification */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            <span className="flex items-center gap-1.5 font-semibold text-slate-900">
-              <span className="w-3.5 h-2.5 inline-block tiranga-stripe rounded-[1px] border border-slate-300 shadow-xs"></span>
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <span className="flex items-center gap-1.5 font-semibold text-slate-900 truncate">
+              <span className="w-3.5 h-2.5 inline-block tiranga-stripe rounded-[1px] border border-slate-300 shadow-xs shrink-0"></span>
               <span>भारत सरकार</span>
               <span className="text-slate-400 font-normal">|</span>
-              <span className="font-normal text-slate-700">Government of India</span>
+              <span className="font-normal text-slate-700 hidden xs:inline truncate">Government of India</span>
+              <span className="font-normal text-slate-700 xs:hidden">GoI</span>
             </span>
             <span className="hidden sm:inline text-slate-300">•</span>
-            <span className="hidden sm:inline text-slate-600 font-medium">
+            <span className="hidden sm:inline text-slate-600 font-medium truncate">
               गृह मंत्रालय | Ministry of Home Affairs
             </span>
           </div>
 
           {/* Right: GIGW Accessibility & Language Tools */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             {/* Font Size Adjuster */}
-            <div className="flex items-center gap-0.5 border-r border-slate-300 pr-2.5">
+            <div className="flex items-center gap-0.5 border-r border-slate-300 pr-2 sm:pr-2.5">
               <button
                 onClick={() => setFontSizeLevel(0)}
                 className={`px-1.5 py-0.5 rounded text-[10px] font-semibold transition ${
@@ -73,7 +74,7 @@ export default function Header() {
             {/* Bilingual Toggle */}
             <button
               onClick={() => setLanguage(language === 'EN' ? 'HI' : 'EN')}
-              className="font-bold text-amber-700 hover:text-amber-800 transition flex items-center gap-1 cursor-pointer"
+              className="font-bold text-amber-700 hover:text-amber-800 transition flex items-center gap-1 cursor-pointer text-[10.5px] sm:text-xs"
               title="Toggle Language"
             >
               <Globe className="w-3 h-3 text-amber-600" />
@@ -92,54 +93,66 @@ export default function Header() {
       </div>
 
       {/* 2. Official Deep Ashoka Navy Primary Header */}
-      <div className="bg-gradient-to-r from-[#0a2540] via-[#0d3156] to-[#0a2540] text-white px-3 sm:px-6 py-3 border-b border-[#0f3b66]">
-        <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-gradient-to-r from-[#0a2540] via-[#0d3156] to-[#0a2540] text-white px-3 sm:px-6 py-2.5 sm:py-3 border-b border-[#0f3b66]">
+        <div className="max-w-6xl mx-auto flex items-center justify-between gap-2.5">
           {/* Left: Lion Capital & Portal Title */}
-          <div className="flex items-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
             {/* Ashoka Lion Capital Insignia */}
-            <div className="w-11 h-13 sm:w-12 sm:h-14 bg-white/10 border border-amber-400/40 rounded-lg p-1 flex flex-col items-center justify-center text-center shrink-0 shadow-sm backdrop-blur-xs">
-              <span className="text-[8px] sm:text-[9px] font-black text-amber-300 tracking-tighter uppercase leading-none">
+            <div className="w-9 h-11 sm:w-12 sm:h-14 bg-white/10 border border-amber-400/40 rounded-lg p-1 flex flex-col items-center justify-center text-center shrink-0 shadow-xs backdrop-blur-xs">
+              <span className="text-[7.5px] sm:text-[9px] font-black text-amber-300 tracking-tighter uppercase leading-none">
                 सत्यमेव
               </span>
-              <span className="text-[8px] sm:text-[9px] font-black text-amber-300 tracking-tighter uppercase leading-none">
+              <span className="text-[7.5px] sm:text-[9px] font-black text-amber-300 tracking-tighter uppercase leading-none">
                 जयते
               </span>
-              <div className="w-5 sm:w-6 h-0.5 bg-amber-400 my-0.5"></div>
-              <span className="text-[7px] text-slate-200 font-bold uppercase tracking-wider">
-                MHA-SSB
+              <div className="w-4 sm:w-6 h-0.5 bg-amber-400 my-0.5"></div>
+              <span className="text-[6.5px] sm:text-[7px] text-slate-200 font-bold uppercase tracking-wider">
+                MHA
               </span>
             </div>
 
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-black tracking-wider text-amber-400 uppercase">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="text-[10px] sm:text-xs font-black tracking-wider text-amber-400 uppercase truncate">
                   सशस्त्र सीमा बल (SSB)
                 </span>
                 <span className="text-slate-300 hidden sm:inline text-xs">|</span>
                 <span className="text-[10px] text-slate-200 hidden sm:inline font-semibold">
                   MINISTRY OF HOME AFFAIRS
                 </span>
-                <span className="text-[9px] bg-blue-900/80 text-blue-200 px-1.5 py-0.2 rounded border border-blue-600/50 font-semibold">
-                  Official GovTech
+                <span className="text-[8px] sm:text-[9px] bg-blue-900/80 text-blue-200 px-1.5 py-0.2 rounded border border-blue-600/50 font-semibold shrink-0">
+                  GovTech
                 </span>
               </div>
-              <h1 className="text-base sm:text-lg font-black tracking-tight text-white flex items-center gap-2">
+              <h1 className="text-sm sm:text-lg font-black tracking-tight text-white flex items-center gap-2 truncate">
                 <span>SSB DRISHTI</span>
                 <span className="text-xs font-normal text-amber-300/90 hidden sm:inline font-mono">
                   (AI-Powered Fake Identity & Document Screening System)
                 </span>
               </h1>
-              <p className="text-[10px] sm:text-[11px] text-slate-300 flex items-center gap-1.5">
+              {/* Desktop detailed subline */}
+              <p className="text-[10px] sm:text-[11px] text-slate-300 hidden sm:flex items-center gap-1.5">
                 <span>Problem Statement SIH26188</span>
                 <span>•</span>
                 <span className="text-sky-300">ICAO Doc 9303 & ISO/IEC 19794-5 Certified Engine</span>
+              </p>
+              {/* Mobile concise subline */}
+              <p className="text-[9.5px] text-slate-300 sm:hidden truncate">
+                MHA Border Security Operations Console
               </p>
             </div>
           </div>
 
           {/* Right: Station Status & Clock */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="bg-white/10 border border-white/20 px-3 py-1.5 rounded-xl text-right backdrop-blur-xs">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {/* Mobile compact badge */}
+            <div className="flex sm:hidden items-center gap-1 px-2 py-1 rounded-lg bg-white/10 border border-white/20 text-[10px]">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span className="font-mono text-amber-300 font-bold">CP-04</span>
+            </div>
+
+            {/* Desktop Station Card */}
+            <div className="hidden sm:block bg-white/10 border border-white/20 px-3 py-1.5 rounded-xl text-right backdrop-blur-xs">
               <div className="text-[10px] text-slate-300">
                 Terminal: <span className="text-white font-mono font-bold">Raxaul-CP-04</span>
               </div>
@@ -163,23 +176,24 @@ export default function Header() {
       </div>
 
       {/* 3. National Tricolor Accent Ribbon */}
-      <div className="h-1 w-full tiranga-stripe shadow-xs"></div>
+      <div className="h-0.5 sm:h-1 w-full tiranga-stripe shadow-xs"></div>
 
       {/* 4. Border Checkpoint Sub-bar */}
       <div className="bg-[#071d33] px-3 sm:px-6 py-1.5 text-xs text-slate-300 border-b border-[#0b2846]">
-        <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-[11px] font-medium">
+        <div className="max-w-6xl mx-auto flex items-center justify-between gap-2 text-[10px] sm:text-[11px]">
+          <div className="flex items-center gap-1.5 font-medium truncate">
             <MapPin className="w-3 h-3 text-amber-400 shrink-0" />
-            <span>Outpost: <strong className="text-white">Raxaul Land Border (Indo-Nepal Checkpoint)</strong></span>
+            <span className="truncate">Outpost: <strong className="text-white">Raxaul Land Border</strong></span>
             <span className="text-slate-400 hidden sm:inline">• Post ID: SSB-RX-04</span>
           </div>
-          <div className="flex items-center gap-3 text-[11px] text-slate-400">
+          <div className="flex items-center gap-2 sm:gap-3 text-slate-400 shrink-0">
             <span className="flex items-center gap-1">
               <Wifi className="w-3 h-3 text-emerald-400" />
-              <span className="text-slate-300">Encrypted Local Edge Node</span>
+              <span className="text-slate-300 hidden sm:inline">Encrypted Local Edge Node</span>
+              <span className="text-emerald-400 font-bold sm:hidden">Online</span>
             </span>
-            <span>•</span>
-            <span>Watchlist Sync: <strong className="text-emerald-400 font-mono">14,289 Records OK</strong></span>
+            <span className="hidden sm:inline">•</span>
+            <span className="hidden sm:inline">Watchlist Sync: <strong className="text-emerald-400 font-mono">14,289 Records OK</strong></span>
           </div>
         </div>
       </div>
