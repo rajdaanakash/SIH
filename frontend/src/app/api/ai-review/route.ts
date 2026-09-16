@@ -59,7 +59,8 @@ function getSecretKey(name: string): string {
   return (process.env[name] || '').trim();
 }
 
-const GROQ_TIMEOUT_MS = 1500;
+const GROQ_TIMEOUT_MS = 3000; // Increased to 3000ms (3 seconds) for robust edge roundtrip
+const GEMINI_TIMEOUT_MS = 8000; // 8000ms for secondary multimodal Gemini fallback
 
 async function executeWithTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
   let timer: NodeJS.Timeout;
@@ -120,7 +121,7 @@ Return ONLY a valid JSON object matching this schema:
   }
 }`;
 
-    // 1. PRIMARY ENGINE: Groq (Qwen 3.8 Vision with strict 1500ms timeout)
+    // 1. PRIMARY ENGINE: Groq (Qwen 3.8 Vision with 3000ms timeout)
     if (groqKey) {
       try {
         const groq = new Groq({ apiKey: groqKey });
@@ -175,24 +176,36 @@ Return ONLY a valid JSON object matching this schema:
         const ai = new GoogleGenAI({ apiKey: geminiKey });
         const contents: any[] = [];
 
-        if (imageBase64 && typeof imageBase64 === 'string' && imageBase64.includes(',')) {
-          const parts = imageBase64.split(',');
-          const mimeMatch = parts[0].match(/:(.*?);/);
-          const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
-          const cleanData = parts[1];
-          contents.push({
-            inlineData: { mimeType, data: cleanData }
-          });
+        if (imageBase64 && typeof imageBase64 === 'string') {
+          if (imageBase64.includes(',')) {
+            const parts = imageBase64.split(',');
+            const mimeMatch = parts[0].match(/:(.*?);/);
+            const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+            const cleanData = parts[1];
+            contents.push({
+              inlineData: { mimeType, data: cleanData }
+            });
+          } else {
+            contents.push({
+              inlineData: { mimeType: 'image/jpeg', data: imageBase64 }
+            });
+          }
         }
 
-        if (visaImageBase64 && typeof visaImageBase64 === 'string' && visaImageBase64.includes(',')) {
-          const parts = visaImageBase64.split(',');
-          const mimeMatch = parts[0].match(/:(.*?);/);
-          const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
-          const cleanData = parts[1];
-          contents.push({
-            inlineData: { mimeType, data: cleanData }
-          });
+        if (visaImageBase64 && typeof visaImageBase64 === 'string') {
+          if (visaImageBase64.includes(',')) {
+            const parts = visaImageBase64.split(',');
+            const mimeMatch = parts[0].match(/:(.*?);/);
+            const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+            const cleanData = parts[1];
+            contents.push({
+              inlineData: { mimeType, data: cleanData }
+            });
+          } else {
+            contents.push({
+              inlineData: { mimeType: 'image/jpeg', data: visaImageBase64 }
+            });
+          }
         }
 
         contents.push({ text: prompt });
@@ -206,7 +219,7 @@ Return ONLY a valid JSON object matching this schema:
           }
         });
 
-        const response = await executeWithTimeout(geminiCall, 4000, 'Gemini 3.6 Flash');
+        const response = await executeWithTimeout(geminiCall, GEMINI_TIMEOUT_MS, 'Gemini 3.6 Flash');
         const responseText = response.text || '{}';
         const parsedJson = JSON.parse(responseText);
         const validated = AiForensicsSchema.parse(parsedJson);
