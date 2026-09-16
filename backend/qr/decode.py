@@ -169,6 +169,67 @@ def extract_qr_raw_data(image_input: Any) -> Tuple[Optional[bytes], Optional[str
         except Exception as e:
             logger.debug(f"OpenCV QRCodeDetector notice: {e}")
 
+    # Pass 5: Aadhaar Quadrant ROI Crops & Sharpening (for phone photos with margins)
+    if cv2 is not None and pyzbar_decode is not None:
+        try:
+            h, w = np_img.shape[:2]
+            rois = [
+                ("bottom_right", np_img[int(h * 0.25):, int(w * 0.35):]),
+                ("right_half", np_img[:, int(w * 0.40):]),
+                ("bottom_half", np_img[int(h * 0.35):, :]),
+            ]
+            for roi_name, roi_img in rois:
+                if roi_img.size == 0 or roi_img.shape[0] < 50 or roi_img.shape[1] < 50:
+                    continue
+                
+                # 5a: Direct ROI with pyzbar
+                roi_pil = Image.fromarray(roi_img)
+                decoded_objects = pyzbar_decode(roi_pil)
+                for obj in decoded_objects:
+                    if obj.type == "QRCODE":
+                        raw_data = obj.data
+                        try:
+                            text_data = raw_data.decode("utf-8")
+                        except UnicodeDecodeError:
+                            text_data = raw_data.decode("latin-1", errors="ignore")
+                        elapsed = (time.time() - t0) * 1000
+                        logger.info(f"[CHECKPOINT 2: QR decode attempt] Pass 5 ({roi_name} ROI direct) SUCCESS in {elapsed:.1f}ms! Bytes={len(raw_data)}")
+                        return raw_data, text_data, None
+
+                # 5b: Sharpened ROI
+                gray_roi = cv2.cvtColor(roi_img, cv2.COLOR_RGB2GRAY) if len(roi_img.shape) == 3 else roi_img
+                kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
+                sharpened = cv2.filter2D(gray_roi, -1, kernel)
+                sharpened_pil = Image.fromarray(sharpened)
+                decoded_objects = pyzbar_decode(sharpened_pil)
+                for obj in decoded_objects:
+                    if obj.type == "QRCODE":
+                        raw_data = obj.data
+                        try:
+                            text_data = raw_data.decode("utf-8")
+                        except UnicodeDecodeError:
+                            text_data = raw_data.decode("latin-1", errors="ignore")
+                        elapsed = (time.time() - t0) * 1000
+                        logger.info(f"[CHECKPOINT 2: QR decode attempt] Pass 5 ({roi_name} sharpened) SUCCESS in {elapsed:.1f}ms! Bytes={len(raw_data)}")
+                        return raw_data, text_data, None
+
+                # 5c: Otsu threshold on ROI
+                _, otsu_roi = cv2.threshold(gray_roi, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+                otsu_pil = Image.fromarray(otsu_roi)
+                decoded_objects = pyzbar_decode(otsu_pil)
+                for obj in decoded_objects:
+                    if obj.type == "QRCODE":
+                        raw_data = obj.data
+                        try:
+                            text_data = raw_data.decode("utf-8")
+                        except UnicodeDecodeError:
+                            text_data = raw_data.decode("latin-1", errors="ignore")
+                        elapsed = (time.time() - t0) * 1000
+                        logger.info(f"[CHECKPOINT 2: QR decode attempt] Pass 5 ({roi_name} Otsu) SUCCESS in {elapsed:.1f}ms! Bytes={len(raw_data)}")
+                        return raw_data, text_data, None
+        except Exception as e:
+            logger.debug(f"Pass 5 ROI crop notice: {e}")
+
     elapsed = (time.time() - t0) * 1000
     logger.info(f"[CHECKPOINT 2: QR decode attempt] All passes completed in {elapsed:.1f}ms. No QR code detected.")
     return None, None, None

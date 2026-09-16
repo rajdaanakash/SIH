@@ -169,4 +169,62 @@ describe('Directive 10: Aadhaar Secure QR & QDA XML Verification & Plain UI Sepa
     expect(checklistContent).toContain('result.qrDetails');
     expect(checklistContent).toContain('RSA-2048 VERIFIED');
   });
+
+  // --------------------------------------------------------------------------
+  // Test Case 5: Real Indian Aadhaar card with nationality "INDIAN (INDIA)"
+  // --------------------------------------------------------------------------
+  it('Real Indian Aadhaar card with "INDIAN (INDIA)" resolves isIndianNational: true, requiresVisa: false, documentType: AADHAAR', async () => {
+    const evaluated = await evaluateScreeningCase({
+      passportPayload: 'data:image/jpeg;base64,real_aadhaar_akash',
+      extractedFields: {
+        fullName: 'AKASH',
+        documentNumber: '4797 6732 3110',
+        nationality: 'INDIAN (INDIA)',
+        dateOfBirth: '08/06/2007',
+        gender: 'M',
+        issuingCountry: 'INDIA',
+      },
+      aiData: {
+        detectedDocType: 'AADHAAR',
+        recommendedAction: 'CLEAR',
+        forensicConfidenceScore: 94.0,
+      },
+      offlineMode: false,
+    });
+
+    expect(evaluated.isIndianNational).toBe(true);
+    expect(evaluated.requiresVisa).toBe(false);
+    expect(evaluated.documentType).toBe('AADHAAR');
+    expect(evaluated.securityAlertMessages?.some(m => m.includes('FOREIGN CITIZEN'))).toBe(false);
+  });
+
+  // --------------------------------------------------------------------------
+  // Test Case 6: QR_NOT_PRESENT NEVER triggers "Aadhaar QR Forgery" or DETAIN
+  // --------------------------------------------------------------------------
+  it('QR_NOT_PRESENT with signature_verified: false NEVER flags Aadhaar QR Forgery or ERR_QR_SIGNATURE_INVALID', async () => {
+    const evaluated = await evaluateScreeningCase({
+      passportPayload: 'data:image/jpeg;base64,real_aadhaar_no_qr',
+      extractedFields: {
+        fullName: 'AKASH',
+        documentNumber: '4797 6732 3110',
+        nationality: 'INDIAN (INDIA)',
+        dateOfBirth: '08/06/2007',
+        gender: 'M',
+      },
+      qrResult: {
+        qr_detected: false,
+        qr_decoded: false,
+        signature_verified: false, // Legacy bridge returned false
+        status: 'QR_NOT_PRESENT',
+      },
+      offlineMode: false,
+    });
+
+    // Invariant: Must NOT be falsely accused of criminal cryptographic forgery!
+    expect(evaluated.securityErrorCode).not.toBe('ERR_QR_SIGNATURE_INVALID');
+    expect(evaluated.securityErrorCode).not.toBe('ERR_QR_DATA_MISMATCH');
+    expect(evaluated.tamperDetails.flaggedRegions.some(r => r.field.includes('QR Forgery'))).toBe(false);
+    expect(evaluated.verdict).not.toBe('DETAIN');
+  });
 });
+

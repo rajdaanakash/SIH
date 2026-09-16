@@ -162,9 +162,25 @@ export async function evaluateScreeningCase(params: EvaluateCaseParams): Promise
     mrzLine3: rawFields.mrzLine3 || '',
   };
 
-  const isIndian = extractedFields.nationality === 'IND' ||
-    extractedFields.nationality === 'INDIA' ||
-    extractedFields.issuingCountry === 'IND';
+  const natUpper = (extractedFields.nationality || '').toUpperCase();
+  const countryUpper = (extractedFields.issuingCountry || '').toUpperCase();
+  const docNumClean = (extractedFields.documentNumber || '').replace(/\s+/g, '');
+  const isAadhaarDoc =
+    Boolean(aiData?.detectedDocType && aiData.detectedDocType.toUpperCase().includes('AADHAAR')) ||
+    Boolean(qrResult?.is_secure_qr || qrResult?.version === 'QDA_XML' || qrResult?.version === 'V2_SECURE_QR') ||
+    /^\d{12}$/.test(docNumClean);
+
+  const isIndian =
+    isAadhaarDoc ||
+    natUpper === 'IND' ||
+    natUpper === 'INDIA' ||
+    natUpper.includes('INDIAN') ||
+    natUpper.includes('BHARAT') ||
+    countryUpper === 'IND' ||
+    countryUpper === 'INDIA' ||
+    countryUpper.includes('INDIAN') ||
+    countryUpper.includes('BHARAT');
+
   const requiresVisa = !isIndian;
   const hasVisa = Boolean(visaPayload || visaFile || (aiData && aiData.hasVisa));
 
@@ -260,13 +276,22 @@ export async function evaluateScreeningCase(params: EvaluateCaseParams): Promise
 
   // 12. QR Verification & Pixel Forensics Evaluation (Directives 1, 2, 3)
   const qrErrorCode = qrResult?.security_error_code || aiData?.qrDetails?.security_error_code || aiData?.securityErrorCode;
-  const qrSigInvalid = Boolean(qrErrorCode === 'ERR_QR_SIGNATURE_INVALID' || qrResult?.signature_verified === false);
-  const qrDataMismatch = Boolean(qrErrorCode === 'ERR_QR_DATA_MISMATCH' || (qrResult?.qr_detected && qrResult?.data_matched === false));
+  const qrSigInvalid = Boolean(
+    qrErrorCode === 'ERR_QR_SIGNATURE_INVALID' ||
+    qrResult?.status === 'SIGNATURE_INVALID' ||
+    (qrResult?.qr_detected && qrResult?.qr_decoded && qrResult?.signature_verified === false)
+  );
+  const qrDataMismatch = Boolean(
+    qrErrorCode === 'ERR_QR_DATA_MISMATCH' ||
+    qrResult?.status === 'DATA_MISMATCH' ||
+    (qrResult?.qr_detected && qrResult?.qr_decoded && qrResult?.data_matched === false)
+  );
   const qrUnreadable = Boolean(
     qrErrorCode === 'ERR_QR_UNREADABLE' ||
     qrResult?.status === 'UNREADABLE' ||
     qrResult?.status === 'QR_IMAGE_QUALITY_INSUFFICIENT' ||
-    qrResult?.status === 'QR_PARSE_FAILED'
+    qrResult?.status === 'QR_PARSE_FAILED' ||
+    (isAadhaarDoc && qrResult && !qrResult.qr_detected)
   );
 
   const copyMoveDetected = Boolean(pixelForensicsResult?.copy_move_detected === true || aiData?.pixelForensics?.copy_move_detected === true);
@@ -309,6 +334,8 @@ export async function evaluateScreeningCase(params: EvaluateCaseParams): Promise
     securityErrorCode = 'ERR_QR_UNREADABLE';
     const reason = qrResult?.status === 'QR_IMAGE_QUALITY_INSUFFICIENT'
       ? 'QR VERIFICATION WARNING: Aadhaar QR code image quality insufficient (too blurry or low resolution). Routed to Secondary Inspection.'
+      : (isAadhaarDoc && qrResult && !qrResult.qr_detected)
+      ? 'QR VERIFICATION NOTICE: Aadhaar QR code could not be detected from uploaded image. Routed to Secondary Inspection for physical card verification.'
       : 'QR VERIFICATION WARNING: Aadhaar QR code unreadable or corrupted. Routed to Secondary Inspection.';
     securityViolations.push(reason);
   } else if (opticalNoiseDetected) {
@@ -482,7 +509,7 @@ export async function evaluateScreeningCase(params: EvaluateCaseParams): Promise
     offlineBypassed: offlineMode,
     timestamp: new Date().toLocaleString('en-IN') + ' IST',
     tokenNumber: `SSB-2026-${Math.floor(10000 + Math.random() * 90000)}`,
-    documentType: icaoDetails.format === 'TD1' ? 'NATIONAL_ID' : 'PASSPORT',
+    documentType: isAadhaarDoc ? 'AADHAAR' : (icaoDetails.format === 'TD1' ? 'NATIONAL_ID' : 'PASSPORT'),
     extractedFields,
     icaoDetails,
     tamperDetails: {

@@ -4,8 +4,8 @@
 
 export async function compressAndResizeImage(
   imageSrc: string,
-  maxDimension: number = 1024,
-  quality: number = 0.82
+  maxDimension: number = 2048,
+  quality: number = 0.94
 ): Promise<string> {
   if (!imageSrc) return '';
 
@@ -58,5 +58,5 @@ export async function compressAndResizeImage(
 
 // Ensure clean JPEG Base64 with automatic compression
 export async function ensureJpegBase64(imageSrc: string): Promise<string> {
-  return compressAndResizeImage(imageSrc, 1024, 0.82);
+  return compressAndResizeImage(imageSrc, 2048, 0.94);
 }

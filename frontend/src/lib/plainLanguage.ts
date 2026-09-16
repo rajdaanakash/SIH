@@ -199,6 +199,19 @@ export function getPlainStep2(result: VerificationResult): PlainStepInfo {
     }
   }
 
+  // Aadhaar document where QR was not detected on image
+  if (result.documentType === 'AADHAAR') {
+    return {
+      stepNumber: 2,
+      title: 'Step 2: Security Code Check',
+      technicalTitle: 'Module 2: Aadhaar Digital Security Code',
+      statusBadge: 'Needs Review — QR Code Not Detected',
+      explanation: 'Step 2: Security Code Check: Needs Review — Security code was not clearly detected from uploaded image. Physical card inspection recommended.',
+      passed: false,
+      statusType: 'warning',
+    };
+  }
+
   if (icaoChecksumFailed) {
     return {
       stepNumber: 2,

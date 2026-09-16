@@ -1,4 +1,4 @@
-export type DocumentType = 'PASSPORT' | 'VISA' | 'NATIONAL_ID' | 'BORDER_PERMIT';
+export type DocumentType = 'PASSPORT' | 'VISA' | 'NATIONAL_ID' | 'BORDER_PERMIT' | 'AADHAAR';
 
 export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH';
 

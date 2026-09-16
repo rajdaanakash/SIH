@@ -28,11 +28,17 @@ export default function DocumentViewer({ result, showTechnicalDetails = false }:
             <span>
               {showTechnicalDetails
                 ? (activeDocTab === 'VISA' ? 'ENTRY VISA SPECIMEN' : `${result.documentType} SPECIMEN`)
-                : (activeDocTab === 'VISA' ? 'Visa Document' : 'Passport Document')}
+                : (activeDocTab === 'VISA'
+                    ? 'Visa Document'
+                    : result.documentType === 'AADHAAR'
+                    ? 'Aadhaar Card'
+                    : result.documentType === 'NATIONAL_ID'
+                    ? 'National ID Card'
+                    : 'Passport Document')}
             </span>
             <span>•</span>
             <span>{showTechnicalDetails ? 'TRANSIT TOKEN' : 'Reference Number'}</span>
-            {result.isIndianNational ? (
+            {result.isIndianNational || result.documentType === 'AADHAAR' ? (
               <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
                 {showTechnicalDetails ? 'INDIAN CITIZEN (VISA EXEMPT)' : 'Indian Citizen — No Visa Needed'}
               </span>

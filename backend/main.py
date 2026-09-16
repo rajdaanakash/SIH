@@ -149,8 +149,8 @@ async def verify_qr_endpoint(
         return {
             "qr_detected": False,
             "qr_decoded": False,
-            "signature_verified": False,
-            "data_matched": False,
+            "signature_verified": None,
+            "data_matched": None,
             "status": status,
             "security_error_code": err_code,
             "message": decoded.get("message", "No QR code could be detected in image."),

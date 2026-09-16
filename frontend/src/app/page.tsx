@@ -91,7 +91,7 @@ export default function Home() {
         reader.onerror = reject;
         reader.readAsDataURL(passportFile);
       });
-      const passportBase64Url = await compressAndResizeImage(passportRawBase64, 1024, 0.82);
+      const passportBase64Url = await compressAndResizeImage(passportRawBase64, 2048, 0.94);
 
       // 2. Convert and compress Visa (if provided)
       let visaBase64Url: string | undefined = undefined;
@@ -102,7 +102,7 @@ export default function Home() {
           reader.onerror = reject;
           reader.readAsDataURL(visaFile);
         });
-        visaBase64Url = await compressAndResizeImage(visaRawBase64, 1024, 0.82);
+        visaBase64Url = await compressAndResizeImage(visaRawBase64, 2048, 0.94);
       }
 
       // 3. Compute client ELA for heatmap layer on passport
@@ -200,7 +200,7 @@ export default function Home() {
         reader.onerror = reject;
         reader.readAsDataURL(visaFile);
       });
-      const visaBase64Url = await compressAndResizeImage(visaRawBase64, 1024, 0.82);
+      const visaBase64Url = await compressAndResizeImage(visaRawBase64, 2048, 0.94);
 
       let aiData: any = null;
       try {
