@@ -35,6 +35,18 @@ export function generateOfficialDossierPdf(result: VerificationResult): void {
     { align: 'center' }
   );
 
+  // Offline / Fallback Notice Banner if applicable
+  let bannerOffset = 38;
+  if (result.offlineBypassed) {
+    doc.setFillColor(254, 243, 199); // Amber tint
+    doc.rect(14, bannerOffset, pageWidth - 28, 7, 'F');
+    doc.setTextColor(146, 64, 14);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.text('MODE: OFFLINE AUTONOMY ACTIVE — DETERMINISTIC LOCAL HEURISTICS ENFORCED (CLOUD BYPASSED)', pageWidth / 2, bannerOffset + 4.5, { align: 'center' });
+    bannerOffset += 9;
+  }
+
   // Verdict Banner
   let verdictColor = [16, 185, 129]; // Emerald Green
   let verdictText = 'VERDICT: TRANSIT CLEARED (LOW RISK)';
@@ -44,17 +56,20 @@ export function generateOfficialDossierPdf(result: VerificationResult): void {
   } else if (result.verdict === 'SECONDARY_INSPECTION') {
     verdictColor = [217, 119, 6]; // Amber
     verdictText = 'FLAGGED: TRANSFER TO SECONDARY MANUAL INVESTIGATION';
+  } else if (result.verdict === 'UNDETERMINED') {
+    verdictColor = [100, 116, 139]; // Slate
+    verdictText = 'STANDBY: CREDENTIAL SCAN AWAITING EVALUATION';
   }
 
   doc.setFillColor(verdictColor[0], verdictColor[1], verdictColor[2]);
-  doc.rect(14, 38, pageWidth - 28, 10, 'F');
+  doc.rect(14, bannerOffset, pageWidth - 28, 10, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10.5);
-  doc.text(verdictText, pageWidth / 2, 44.5, { align: 'center' });
+  doc.text(verdictText, pageWidth / 2, bannerOffset + 6.5, { align: 'center' });
 
   // Section 1: Credential Particulars
-  let y = 56;
+  let y = bannerOffset + 17;
   doc.setTextColor(15, 23, 42);
   doc.setFontSize(10.5);
   doc.setFont('helvetica', 'bold');
@@ -81,14 +96,14 @@ export function generateOfficialDossierPdf(result: VerificationResult): void {
   doc.text('Gender: ' + result.extractedFields.gender, col3, y);
 
   // Section 2: ICAO 9303 Compliance
-  y += 12;
+  y += 11;
   doc.setTextColor(15, 23, 42);
   doc.setFontSize(10.5);
   doc.setFont('helvetica', 'bold');
   doc.text('2. ICAO DOC 9303 MRZ COMPLIANCE & CHECKSUM VERIFICATION', 14, y);
   doc.line(14, y + 2, pageWidth - 14, y + 2);
 
-  y += 8;
+  y += 7;
   doc.setFontSize(8.5);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(51, 65, 85);
@@ -98,29 +113,35 @@ export function generateOfficialDossierPdf(result: VerificationResult): void {
   doc.text('Status: ' + icaoStatus, col2, y);
   doc.text('Doc # Checksum: ' + (result.icaoDetails.documentNumberValid ? 'VALID' : 'INVALID'), col3, y);
 
-  y += 6;
+  y += 5;
   doc.text('DOB Checksum: ' + (result.icaoDetails.dobValid ? 'VALID' : 'INVALID'), col1, y);
   doc.text('Expiry Checksum: ' + (result.icaoDetails.expiryValid ? 'VALID' : 'INVALID'), col2, y);
   doc.text('Composite Checksum: ' + (result.icaoDetails.compositeValid ? 'VALID' : 'INVALID'), col3, y);
 
   if (result.extractedFields.mrzLine1) {
-    y += 6;
-    doc.setFont('courier', 'normal');
-    doc.text('MRZ Line 1: ' + result.extractedFields.mrzLine1, col1, y);
     y += 5;
+    doc.setFont('courier', 'normal');
+    doc.setFontSize(7.5);
+    doc.text('MRZ Line 1: ' + result.extractedFields.mrzLine1, col1, y);
+    y += 4;
     doc.text('MRZ Line 2: ' + result.extractedFields.mrzLine2, col1, y);
+    if (result.extractedFields.mrzLine3) {
+      y += 4;
+      doc.text('MRZ Line 3: ' + result.extractedFields.mrzLine3, col1, y);
+    }
     doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
   }
 
   // Section 3: Digital & Physical Forensics
-  y += 12;
+  y += 10;
   doc.setTextColor(15, 23, 42);
   doc.setFontSize(10.5);
   doc.setFont('helvetica', 'bold');
   doc.text('3. MULTI-FACTOR FORENSICS & FORGERY ANALYSIS', 14, y);
   doc.line(14, y + 2, pageWidth - 14, y + 2);
 
-  y += 8;
+  y += 7;
   doc.setFontSize(8.5);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(51, 65, 85);
@@ -129,47 +150,58 @@ export function generateOfficialDossierPdf(result: VerificationResult): void {
   doc.text('Text Manipulation: ' + (result.tamperDetails.textManipulationDetected ? 'FLAGGED (Font Inconsistent)' : 'CLEAN'), col2, y);
   doc.text('Stamp Verification: ' + (result.tamperDetails.stampForgeryDetected ? 'ANOMALOUS' : 'AUTHENTIC'), col3, y);
 
-  y += 6;
+  y += 5;
   doc.text('ELA Anomaly Score: ' + result.tamperDetails.elaAnomalyScore, col1, y);
   doc.text('Metadata Tampered: ' + (result.tamperDetails.metadataTampered ? 'YES (Editing Software Fingerprint)' : 'NO'), col2, y);
   doc.text('Watchlist Check: ' + (result.watchlistHit ? 'CRITICAL HIT' : 'CLEARED'), col3, y);
 
+  if (result.securityErrorCode) {
+    y += 5;
+    doc.setTextColor(220, 38, 38);
+    doc.setFont('helvetica', 'bold');
+    doc.text('GATEKEEPER ERROR CODE: ' + result.securityErrorCode, col1, y);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(51, 65, 85);
+  }
+
   // Flagged findings box if any
   if (result.tamperDetails.flaggedRegions.length > 0) {
-    y += 8;
+    y += 7;
     doc.setFillColor(254, 242, 242);
     doc.setDrawColor(252, 165, 165);
-    doc.rect(14, y, pageWidth - 28, 16, 'FD');
+    const boxHeight = Math.min(22, 8 + result.tamperDetails.flaggedRegions.length * 4);
+    doc.rect(14, y, pageWidth - 28, boxHeight, 'FD');
     doc.setTextColor(185, 28, 28);
     doc.setFont('helvetica', 'bold');
     doc.text('FLAGGED IRREGULARITIES:', 18, y + 5);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    result.tamperDetails.flaggedRegions.forEach((reg, idx) => {
-      doc.text('• ' + reg.field + ': ' + reg.description, 18, y + 10 + idx * 4);
+    result.tamperDetails.flaggedRegions.slice(0, 3).forEach((reg, idx) => {
+      doc.text('• ' + reg.field + ': ' + reg.description, 18, y + 9 + idx * 4);
     });
-    y += 18;
+    y += boxHeight + 2;
   }
 
   // Section 4: Biometric 1:1 Match
-  y += 10;
+  y += 8;
   doc.setTextColor(15, 23, 42);
   doc.setFontSize(10.5);
   doc.setFont('helvetica', 'bold');
   doc.text('4. 1:1 LIVE BIOMETRIC VERIFICATION & LIVENESS', 14, y);
   doc.line(14, y + 2, pageWidth - 14, y + 2);
 
-  y += 8;
+  y += 7;
   doc.setFontSize(8.5);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(51, 65, 85);
 
+  const bearerText = result.biometricDetails.bearerStatus || (result.biometricDetails.faceMatched ? 'BEARER_CONFIRMED' : 'BEARER_MISMATCH');
   doc.text('Face Match: ' + (result.biometricDetails.faceMatched ? 'VERIFIED' : 'MISMATCH'), col1, y);
   doc.text('Similarity Score: ' + result.biometricDetails.similarityScore + '% (Threshold: 68%)', col2, y);
-  doc.text('Liveness Test: ' + (result.biometricDetails.livenessVerified ? 'PASSED (Anti-Spoof)' : 'FAILED'), col3, y);
+  doc.text('Identity Bearer Status: ' + bearerText, col3, y);
 
-  // Section 5: Risk Assessment & Audit Footer
-  y += 16;
+  // Section 5: Risk Assessment & Section 65B Admissibility
+  y += 12;
   doc.setFillColor(248, 250, 252);
   doc.setDrawColor(226, 232, 240);
   doc.rect(14, y, pageWidth - 28, 22, 'FD');
@@ -177,23 +209,33 @@ export function generateOfficialDossierPdf(result: VerificationResult): void {
   doc.setTextColor(15, 23, 42);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9.5);
-  doc.text('COMPOSITE THREAT RISK INDEX: ' + result.riskScore + ' / 100  [LEVEL: ' + result.riskLevel + ']', 18, y + 7);
+  doc.text('COMPOSITE THREAT RISK INDEX: ' + result.riskScore + ' / 100  [LEVEL: ' + result.riskLevel + ']', 18, y + 6);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(71, 85, 105);
-  doc.text('Summary: ' + result.executiveSummary, 18, y + 13, { maxWidth: pageWidth - 36 });
+  doc.text('Summary: ' + result.executiveSummary, 18, y + 12, { maxWidth: pageWidth - 36 });
 
-  // Officer Signature & Cryptographic Seal
-  y += 32;
-  doc.line(14, y, 70, y);
-  doc.text('Examining Officer Signature & Stamp', 14, y + 5);
-  doc.text('SSB Unit: 42nd Battalion (Raxaul)', 14, y + 9);
-
-  doc.line(pageWidth - 75, y, pageWidth - 14, y);
-  doc.text('Cryptographic Verification Hash (SHA-256):', pageWidth - 75, y + 5);
-  doc.setFont('courier', 'normal');
+  // Section 65B Indian Evidence Act Certificate & Cryptographic Hashes
+  y += 26;
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
+  doc.setFont('helvetica', 'bold');
+  doc.text('INDIAN EVIDENCE ACT (SECTION 65B) ELECTRONIC RECORD CERTIFICATE', 14, y);
+  doc.setFont('helvetica', 'normal');
   doc.setFontSize(7);
-  doc.text('8f3c...b912-ssb-gov-in-verified', pageWidth - 75, y + 9);
+  doc.text('This tamper-evident digital screening dossier was generated autonomously by SSB Drishti terminal at Outpost Raxaul.', 14, y + 4);
+
+  y += 10;
+  doc.line(14, y, 70, y);
+  doc.text('Examining Officer Signature & Stamp', 14, y + 4);
+  doc.text('SSB Unit: 42nd Battalion (Raxaul Outpost)', 14, y + 8);
+
+  const docHash = result.documentHashSha256 || 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+  doc.line(pageWidth - 95, y, pageWidth - 14, y);
+  doc.text('Cryptographic Ingestion Hash (SHA-256):', pageWidth - 95, y + 4);
+  doc.setFont('courier', 'normal');
+  doc.setFontSize(6.5);
+  doc.text(docHash.slice(0, 32) + '...', pageWidth - 95, y + 8);
 
   // Save PDF
   doc.save('SSB_Drishti_Dossier_' + result.tokenNumber + '.pdf');

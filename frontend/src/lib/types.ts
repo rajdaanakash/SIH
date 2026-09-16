@@ -13,10 +13,24 @@ export interface ExtractedFields {
   mrzString?: string;
   mrzLine1?: string;
   mrzLine2?: string;
+  mrzLine3?: string;
   visaType?: string;
   stayDurationDays?: number;
   entryValidity?: string;
 }
+
+export type Verdict = 'CLEAR' | 'SECONDARY_INSPECTION' | 'DETAIN' | 'UNDETERMINED';
+
+export type SecurityErrorCode =
+  | 'ERR_DUPLICATE_INGESTION'
+  | 'ERR_DOCUMENT_EXPIRED'
+  | 'ERR_INVALID_PRIMARY_DOC'
+  | 'ERR_INVALID_JURISDICTION'
+  | 'ERR_KNOWN_DUMMY_TEMPLATE'
+  | 'ERR_ICAO_CHECKSUM'
+  | 'ERR_VIZ_MRZ_MISMATCH'
+  | 'SUSPICIOUS_OPTICAL_NOISE'
+  | 'AI_FORENSICS_UNAVAILABLE';
 
 export interface IcaoChecksumDetails {
   documentNumberValid: boolean;
@@ -25,6 +39,10 @@ export interface IcaoChecksumDetails {
   compositeValid: boolean;
   rawAlgorithm: string;
   overallIcaoCompliant: boolean;
+  format?: 'TD1' | 'TD2' | 'TD3' | 'MRV_A' | 'MRV_B';
+  opticalNoiseDetected?: boolean;
+  opticalNoiseField?: string;
+  opticalNoiseCandidate?: string;
   notes: string[];
 }
 
@@ -53,6 +71,7 @@ export interface BiometricMatchResult {
   livenessConfidence: number; // 0 to 100
   faceDetectedInDocument: boolean;
   liveFeedAvailable: boolean;
+  bearerStatus?: 'BEARER_CONFIRMED' | 'BEARER_MISMATCH' | 'AWAITING_CAPTURE' | 'NO_FACE_DETECTED';
 }
 
 export interface VisaVerificationDetails {
@@ -85,7 +104,8 @@ export interface VerificationResult {
   watchlistDetails?: string;
   riskScore: number; // 0 to 100
   riskLevel: RiskLevel;
-  verdict: 'CLEAR' | 'SECONDARY_INSPECTION' | 'DETAIN';
+  verdict: Verdict;
+  isAlreadyCompromised?: boolean;
   executiveSummary: string;
   documentImageUrl: string;
   documentFaceUrl: string;
@@ -105,7 +125,13 @@ export interface VerificationResult {
   isDummySpecimen?: boolean;
   vizMrzMismatch?: boolean;
   icaoChecksumFailed?: boolean;
+  opticalNoiseDetected?: boolean;
+  opticalNoiseDetails?: string;
+  securityErrorCode?: SecurityErrorCode;
   securityAlertMessages?: string[];
+  offlineBypassed?: boolean;
+  documentHashSha256?: string;
+  visaHashSha256?: string;
 }
 
 export interface ScenarioPreset {

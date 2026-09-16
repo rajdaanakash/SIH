@@ -1,125 +1,106 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
 import { GoogleGenAI } from '@google/genai';
-import fs from 'fs';
-import path from 'path';
+import { z } from 'zod';
 
-function resolveApiKey(keyName: string): string {
-  if (process.env[keyName] && process.env[keyName]?.trim() !== '') {
-    return process.env[keyName]!.trim();
-  }
+const FlaggedRegionSchema = z.object({
+  field: z.string().default('General Substrate'),
+  description: z.string().default('Anomaly flagged'),
+  severity: z.enum(['LOW', 'MEDIUM', 'HIGH']).default('MEDIUM'),
+  box: z.object({
+    x: z.number().default(0),
+    y: z.number().default(0),
+    width: z.number().default(100),
+    height: z.number().default(100),
+  }).default({ x: 0, y: 0, width: 100, height: 100 }),
+});
+
+const AiForensicsSchema = z.object({
+  isValidIdentityDocument: z.boolean().default(true),
+  detectedDocType: z.string().default('PASSPORT'),
+  tamperDetected: z.boolean().default(false),
+  tamperSeverity: z.enum(['LOW', 'MEDIUM', 'HIGH']).default('LOW'),
+  forensicConfidenceScore: z.number().min(0).max(100).default(85),
+  anomalyDetails: z.string().default(''),
+  flaggedRegions: z.array(FlaggedRegionSchema).default([]),
+  forensicObservations: z.array(z.string()).default([]),
+  reasoning: z.string().default(''),
+  extractedFields: z.object({
+    fullName: z.string().optional(),
+    documentNumber: z.string().optional(),
+    nationality: z.string().optional(),
+    dateOfBirth: z.string().optional(),
+    expiryDate: z.string().optional(),
+    gender: z.string().optional(),
+    issuingCountry: z.string().optional(),
+    mrzLine1: z.string().optional(),
+    mrzLine2: z.string().optional(),
+    mrzLine3: z.string().optional(),
+  }).optional(),
+  visaDetails: z.object({
+    visaNumber: z.string().optional(),
+    passportNumberLinked: z.string().optional(),
+    visaType: z.string().optional(),
+    stayDurationDays: z.number().optional(),
+    entryValidity: z.string().optional(),
+    validFrom: z.string().optional(),
+    validUntil: z.string().optional(),
+    issuingPost: z.string().optional(),
+    passportMatched: z.boolean().optional(),
+    nameMatched: z.boolean().optional(),
+    nationalityMatched: z.boolean().optional(),
+    validityAligned: z.boolean().optional(),
+    overallCrossCheckPassed: z.boolean().optional(),
+    crossCheckNotes: z.array(z.string()).optional(),
+  }).optional(),
+});
+
+function getSecretKey(name: string): string {
+  return (process.env[name] || '').trim();
+}
+
+const GROQ_TIMEOUT_MS = 1500;
+
+async function executeWithTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timer: NodeJS.Timeout;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+  });
   try {
-    const envPath = path.join(process.cwd(), '.env.local');
-    if (fs.existsSync(envPath)) {
-      const content = fs.readFileSync(envPath, 'utf8');
-      const regex = new RegExp(`${keyName}=(.*)`);
-      const match = content.match(regex);
-      if (match && match[1] && match[1].trim() !== '') {
-        return match[1].trim();
-      }
-    }
-  } catch (e) {}
-  return '';
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    clearTimeout(timer!);
+  }
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { imageBase64, visaImageBase64, documentType, currentFields } = body;
+    const { imageBase64, visaImageBase64 } = body;
 
-    const groqKey = resolveApiKey('GROQ_API_KEY');
-    const geminiKey = resolveApiKey('GEMINI_API_KEY');
+    const groqKey = getSecretKey('GROQ_API_KEY');
+    const geminiKey = getSecretKey('GEMINI_API_KEY');
 
-    const prompt = `You are a Senior Forensic Document & Immigration Security Examiner for the Sashastra Seema Bal (SSB), Ministry of Home Affairs, Government of India.
-Current Operating Date & Year: September 2026 (Year: 2026).
-Analyze the uploaded document(s) for border control immigration verification.
-${visaImageBase64 ? 'NOTE: TWO DOCUMENTS ARE PROVIDED. Image 1 is the PRIMARY TRAVEL PASSPORT. Image 2 is the ENTRY VISA / CONSULAR ENDORSEMENT.' : 'NOTE: ONE DOCUMENT IS PROVIDED (Passport/National ID).'}
-
-CRITICAL SECURITY GATEKEEPERS (ZERO-TOLERANCE RULES):
-
-RULE 1: DUPLICATE SPECIMEN DETECTION
-- Compare Image 1 and Image 2. If BOTH images are identical or show the same document (e.g., the user uploaded the exact same document into both the Passport and Visa slots):
-  You MUST IMMEDIATELY set:
-  "isDuplicate": true,
-  "tamperDetected": true,
-  "recommendedAction": "DETAIN",
-  "riskScore": 98,
-  "reasoning": "FRAUD DETECTED: The exact same document specimen was uploaded for both Passport and Visa. An authentic separate national passport booklet and an official visa permit are required."
-
-RULE 2: STRICT EXPIRATION VALIDATION (CURRENT YEAR IS 2026)
-- Check the "Expiry Date" or "Expiration Date" on the document(s).
-- If the expiry date is in the past relative to the current year 2026 (e.g. 2006, 2015, 2024, or any date before today):
-  You MUST IMMEDIATELY set:
-  "isExpired": true,
-  "tamperDetected": true,
-  "recommendedAction": "DETAIN",
-  "riskScore": 96,
-  "reasoning": "CRITICAL BORDER VIOLATION: Document is EXPIRED. Expiry date is in the past relative to 2026. Expired documents are strictly denied entry under Section 3 of the Passports (Entry into India) Act."
-
-RULE 3: PRIMARY TRAVEL DOCUMENT CLASSIFICATION
-- The document in Image 1 MUST be a Primary Travel Document (Passport booklet or National ID).
-- If Image 1 is actually a VISA STICKER / FOIL (for example, reads "VISA", "UNITED STATES OF AMERICA VISA", or MRZ starts with "V<" or "VN"):
-  You MUST set:
-  "isWrongDocType": true,
-  "detectedDocType": "VISA_STICKER_IN_PASSPORT_SLOT",
-  "recommendedAction": "DETAIN",
-  "riskScore": 95,
-  "reasoning": "INVALID PRIMARY DOCUMENT: A Visa foil/sticker was uploaded in the Passport slot. A national Passport booklet is mandatory."
-
-RULE 4: CONSULAR JURISDICTION (INDIAN BORDER CLEARANCE)
-- This is an Indian immigration checkpoint under the Ministry of Home Affairs, Government of India.
-- If the traveler presents a VISA issued by the "UNITED STATES OF AMERICA" or other foreign country:
-  A US Visa grants zero entry privileges into the Republic of India!
-  You MUST set:
-  "isInvalidJurisdiction": true,
-  "recommendedAction": "DETAIN",
-  "riskScore": 96,
-  "reasoning": "JURISDICTION VIOLATION: Uploaded Visa is a foreign visa (UNITED STATES OF AMERICA). Entering India requires an authentic Indian Entry Visa / e-Visa issued by the Government of India."
-
-RULE 5: DUMMY / SPECIMEN / TEST TEMPLATE DETECTION & ICAO CHECK DIGIT FRAUD
-- Check if the document matches known internet sample / dummy mock-up templates:
-  * Name: "ARJUN KUMAR", Document Number: "A1234567", or sequential numbers "1234567".
-  * VIZ vs MRZ discrepancies: Check if VIZ Date of Birth (e.g. 15/02/1985) contradicts MRZ Date of Birth (e.g. 850715 = 15 July 1985).
-  * ICAO 9303 checksums: Check if Doc #, DOB, or Expiry check-digits fail modulus-10 verification.
-- If ANY dummy template, sequential placeholder number, VIZ-MRZ date mismatch, or ICAO checksum failure is detected:
-  You MUST set:
-  "isDummySpecimen": true,
-  "tamperDetected": true,
-  "recommendedAction": "DETAIN",
-  "riskScore": 99,
-  "reasoning": "CRITICAL FRAUD: Document identified as an unauthenticated dummy/specimen template (A1234567 / ARJUN KUMAR). ICAO 9303 checksums failed and VIZ-MRZ date discrepancies detected. Traveler must be detained immediately."
-
-STAGE 1: DOCUMENT PRE-VALIDATION & CLASSIFICATION
-Check if the uploaded image(s) are authentic GOVERNMENT-ISSUED IDENTITY OR TRAVEL DOCUMENTS.
-- If ANY uploaded image is an ACADEMIC MARKSHEET, BILL, RECEIPT, OR NON-IDENTITY PAPER:
-  Set "isValidIdentityDocument": false, "detectedDocType": "INVALID_NON_IDENTITY_DOCUMENT", "recommendedAction": "DETAIN", "riskScore": 95.
-
-STAGE 2: PRIMARY DOCUMENT OCR & FORENSICS
-1. Extract: Full Name, Document Number (Passport #), Nationality, Date of Birth, Expiry Date, Gender, Issuing Country, MRZ lines.
-2. Forensic Tamper: Check digital font alterations, photo replacement seams, substrate laminate security patterns.
-
-STAGE 3: NATIONALITY-BASED VISA RULES & CROSS-RECONCILIATION
-- If Indian Passport: Visa is EXEMPT.
-- If Foreign Passport: An Indian Entry Visa is MANDATORY.
-  * If Visa is provided: Extract visaNumber, passportNumberLinked, visaType, stayDurationDays, entryValidity, validFrom, validUntil, issuingPost.
-  * Cross-check passportNumberLinked on the Visa with the Passport Number on Image 1. If mismatch -> recommendedAction = "DETAIN".
-
-STAGE 4: FINAL VERDICT & COMPOSITE SCORING
-- If isDuplicate OR isExpired OR isWrongDocType OR isInvalidJurisdiction OR isDummySpecimen: recommendedAction = "DETAIN", riskScore >= 95.
-- If genuine Indian passport OR genuine foreign passport with valid, matching, unexpired Indian Visa: recommendedAction = "CLEAR", riskScore between 8 and 20.
-- If foreign passport without visa: recommendedAction = "SECONDARY_INSPECTION", riskScore 48.
+    const prompt = `You are an AI Forensic Document Specialist at an Indian Border Terminal (SSB Outpost Raxaul, Year 2026).
+Your task is STRICTLY physical document forensics, optical character recognition, and cross-reconciliation.
+IMPORTANT INSTRUCTION: DO NOT JUDGE MATHEMATICAL CHECKSUMS OR TEMPORAL EXPIRY VALIDITY. Those are strictly handled by the deterministic mathematical engine.
+Your output must evaluate:
+1. Physical document authenticity: substrate integrity, photo-replacement seams, font inconsistencies, digital tampering.
+2. OCR extraction of visible text (Full Name, Document Number, Nationality, DOB, Expiry, MRZ lines).
+3. If Visa is present: Cross-reference passport number, name, and issuing authority.
+4. Output a forensicConfidenceScore (0 to 100), tamperDetected (true/false), tamperSeverity, and flagged regions.
 
 Return ONLY a valid JSON object matching this schema:
 {
   "isValidIdentityDocument": true,
   "detectedDocType": "PASSPORT",
-  "isDuplicate": false,
-  "isExpired": false,
-  "isWrongDocType": false,
-  "isInvalidJurisdiction": false,
-  "isDummySpecimen": false,
-  "rejectionReason": "",
-  "isLiveAi": true,
+  "tamperDetected": false,
+  "tamperSeverity": "LOW",
+  "forensicConfidenceScore": 92.0,
+  "anomalyDetails": "",
+  "flaggedRegions": [],
+  "forensicObservations": ["Observation 1..."],
+  "reasoning": "...",
   "extractedFields": {
     "fullName": "...",
     "documentNumber": "...",
@@ -131,37 +112,15 @@ Return ONLY a valid JSON object matching this schema:
     "mrzLine1": "...",
     "mrzLine2": "..."
   },
-  "hasVisa": ${visaImageBase64 ? 'true' : 'false'},
   "visaDetails": {
     "visaNumber": "...",
     "passportNumberLinked": "...",
     "visaType": "...",
-    "stayDurationDays": 30,
-    "entryValidity": "MULTIPLE",
-    "validFrom": "...",
-    "validUntil": "...",
-    "issuingPost": "...",
-    "passportMatched": true,
-    "nameMatched": true,
-    "nationalityMatched": true,
-    "validityAligned": true,
-    "overallCrossCheckPassed": true,
-    "crossCheckNotes": ["..."]
-  },
-  "forensicObservations": [
-    "Observation 1...",
-    "Observation 2..."
-  ],
-  "tamperDetected": false,
-  "tamperSeverity": "LOW",
-  "anomalyDetails": "",
-  "aiConfidenceScore": 96.5,
-  "recommendedAction": "CLEAR",
-  "riskScore": 14,
-  "reasoning": "..."
+    "issuingPost": "..."
+  }
 }`;
 
-    // 1. PRIMARY ENGINE: Groq (Ultra-Fast LPU Inference with high rate limits)
+    // 1. PRIMARY ENGINE: Groq (Qwen 3.8 Vision with strict 1500ms timeout)
     if (groqKey) {
       try {
         const groq = new Groq({ apiKey: groqKey });
@@ -187,7 +146,7 @@ Return ONLY a valid JSON object matching this schema:
           });
         }
 
-        const completion = await groq.chat.completions.create({
+        const groqCall = groq.chat.completions.create({
           model: 'qwen/qwen3.8-27b',
           max_tokens: 800,
           messages: [{ role: 'user', content: contentItems }],
@@ -195,126 +154,109 @@ Return ONLY a valid JSON object matching this schema:
           temperature: 0.1,
         });
 
+        const completion = await executeWithTimeout(groqCall, GROQ_TIMEOUT_MS, 'Groq Vision');
         const reply = completion.choices[0]?.message?.content || '{}';
-        const parsed = JSON.parse(reply);
+        const parsedJson = JSON.parse(reply);
+        const validated = AiForensicsSchema.parse(parsedJson);
+
         return NextResponse.json({
           isLiveAi: true,
           provider: 'Groq LPU (Qwen 3.8 Vision)',
-          data: parsed
+          data: validated,
         });
       } catch (groqErr: any) {
-        console.warn('Groq Vision attempted, falling back to Gemini:', groqErr.message);
+        console.warn('Groq Vision unavailable/timed out, falling back to Gemini:', groqErr.message);
       }
     }
 
     // 2. SECONDARY ENGINE: Google Gemini 3.6 Flash
     if (geminiKey) {
-      const ai = new GoogleGenAI({ apiKey: geminiKey });
-      const contents: any[] = [];
+      try {
+        const ai = new GoogleGenAI({ apiKey: geminiKey });
+        const contents: any[] = [];
 
-      if (imageBase64 && typeof imageBase64 === 'string' && imageBase64.includes(',')) {
-        const parts = imageBase64.split(',');
-        const mimeMatch = parts[0].match(/:(.*?);/);
-        const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
-        const cleanData = parts[1];
-
-        contents.push({
-          inlineData: {
-            mimeType: mimeType,
-            data: cleanData
-          }
-        });
-      }
-
-      if (visaImageBase64 && typeof visaImageBase64 === 'string' && visaImageBase64.includes(',')) {
-        const parts = visaImageBase64.split(',');
-        const mimeMatch = parts[0].match(/:(.*?);/);
-        const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
-        const cleanData = parts[1];
-
-        contents.push({
-          inlineData: {
-            mimeType: mimeType,
-            data: cleanData
-          }
-        });
-      }
-
-      contents.push({ text: prompt });
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.6-flash',
-        contents: contents,
-        config: {
-          responseMimeType: 'application/json',
-          temperature: 0.1
+        if (imageBase64 && typeof imageBase64 === 'string' && imageBase64.includes(',')) {
+          const parts = imageBase64.split(',');
+          const mimeMatch = parts[0].match(/:(.*?);/);
+          const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+          const cleanData = parts[1];
+          contents.push({
+            inlineData: { mimeType, data: cleanData }
+          });
         }
-      });
 
-      const responseText = response.text || '{}';
-      const parsed = JSON.parse(responseText);
-      return NextResponse.json({
-        isLiveAi: true,
-        provider: 'Gemini 3.6 Flash',
-        data: parsed
-      });
+        if (visaImageBase64 && typeof visaImageBase64 === 'string' && visaImageBase64.includes(',')) {
+          const parts = visaImageBase64.split(',');
+          const mimeMatch = parts[0].match(/:(.*?);/);
+          const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+          const cleanData = parts[1];
+          contents.push({
+            inlineData: { mimeType, data: cleanData }
+          });
+        }
+
+        contents.push({ text: prompt });
+
+        const geminiCall = ai.models.generateContent({
+          model: 'gemini-3.6-flash',
+          contents,
+          config: {
+            responseMimeType: 'application/json',
+            temperature: 0.1,
+          }
+        });
+
+        const response = await executeWithTimeout(geminiCall, 4000, 'Gemini 3.6 Flash');
+        const responseText = response.text || '{}';
+        const parsedJson = JSON.parse(responseText);
+        const validated = AiForensicsSchema.parse(parsedJson);
+
+        return NextResponse.json({
+          isLiveAi: true,
+          provider: 'Gemini 3.6 Flash',
+          data: validated,
+        });
+      } catch (geminiErr: any) {
+        console.warn('Gemini 3.6 Flash inference failed:', geminiErr.message);
+      }
     }
 
-    // 3. Fallback if no keys are provided
+    // 3. FAIL-CLOSED FALLBACK: If both providers fail or timeout, route to SECONDARY_INSPECTION, NEVER CLEAR
     return NextResponse.json({
       isLiveAi: false,
-      isValidIdentityDocument: true,
-      message: 'Running in Edge Simulation Mode.',
+      status: 'AI_FORENSICS_UNAVAILABLE',
+      recommendedAction: 'SECONDARY_INSPECTION',
+      riskScore: 48,
+      message: 'AI Forensics gateway unavailable or timed out. Fail-closed security rule enforced.',
       data: {
         isValidIdentityDocument: true,
-        detectedDocType: 'PASSPORT',
-        recommendedAction: 'CLEAR',
-        aiConfidenceScore: 94.5,
-        hasVisa: Boolean(visaImageBase64),
-        visaDetails: visaImageBase64 ? {
-          visaNumber: 'IND-V-89412',
-          passportNumberLinked: 'Z8941209',
-          visaType: 'TOURIST / TRANSIT',
-          stayDurationDays: 30,
-          entryValidity: 'MULTIPLE',
-          validFrom: '01/01/2026',
-          validUntil: '31/12/2026',
-          issuingPost: 'EMBASSY OF INDIA, KATHMANDU',
-          passportMatched: true,
-          nameMatched: true,
-          nationalityMatched: true,
-          validityAligned: true,
-          overallCrossCheckPassed: true,
-          crossCheckNotes: ['Visa linked passport number matches primary document.', 'Traveler name & nationality match.']
-        } : undefined,
-        extractedFields: {
-          fullName: 'RAHUL VERMA',
-          documentNumber: 'Z8941209',
-          nationality: 'IND',
-          dateOfBirth: '14/08/1996',
-          expiryDate: '13/08/2034',
-          gender: 'M',
-          issuingCountry: 'IND',
-          mrzLine1: 'P<INDFVERMA<<RAHUL<<<<<<<<<<<<<<<<<<<<<<<<<<',
-          mrzLine2: 'Z8941209<2IND9608144M3408138<<<<<<<<<<<<<<<0'
-        },
+        detectedDocType: 'UNKNOWN_OR_UNINSPECTED',
+        tamperDetected: false,
+        tamperSeverity: 'MEDIUM',
+        forensicConfidenceScore: 0,
+        recommendedAction: 'SECONDARY_INSPECTION',
+        riskScore: 48,
+        reasoning: 'AI Forensics gateway timed out or offline. Traveler routed to Secondary Inspection for manual forensic inspection.',
         forensicObservations: [
-          'Edge forensic inspection: Micro-print line integrity across bio-page verified.',
-          'Font kerning and numerical baseline alignment consistent.',
-          'Substrate reflection shows authentic laminate security pattern.'
+          'Multimodal AI vision gateway unavailable/timed out.',
+          'Deterministic Stage 1 & Stage 3 verification remain active.',
+          'Mandatory physical inspection required under zero-trust border protocol.'
         ]
       }
     });
 
   } catch (error: any) {
-    console.error('AI Review Route Error:', error);
+    console.error('AI Review Gateway Error:', error);
     return NextResponse.json(
       {
         isLiveAi: false,
+        status: 'AI_FORENSICS_UNAVAILABLE',
+        recommendedAction: 'SECONDARY_INSPECTION',
+        riskScore: 48,
         error: error.message || 'Failed to process AI review.',
-        fallbackNotice: 'Edge forensic engine fallback active.'
+        message: 'Fail-closed security rule enforced: Secondary inspection required.'
       },
-      { status: 500 }
+      { status: 503 }
     );
   }
 }

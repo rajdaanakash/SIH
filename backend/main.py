@@ -56,15 +56,37 @@ def read_root():
 
 @app.post("/api/mrz/verify")
 def verify_mrz(req: MrzVerificationRequest):
-    doc_valid = calculate_icao_check_digit(req.document_number) == int(req.doc_check_digit)
-    dob_valid = calculate_icao_check_digit(req.date_of_birth) == int(req.dob_check_digit)
-    exp_valid = calculate_icao_check_digit(req.expiry_date) == int(req.expiry_check_digit)
-    overall = doc_valid and dob_valid and exp_valid
+    try:
+        doc_valid = calculate_icao_check_digit(req.document_number) == int(req.doc_check_digit)
+    except (ValueError, TypeError):
+        doc_valid = False
+
+    try:
+        dob_valid = calculate_icao_check_digit(req.date_of_birth) == int(req.dob_check_digit)
+    except (ValueError, TypeError):
+        dob_valid = False
+
+    try:
+        exp_valid = calculate_icao_check_digit(req.expiry_date) == int(req.expiry_check_digit)
+    except (ValueError, TypeError):
+        exp_valid = False
+
+    composite_valid = True
+    if req.composite_mrz and len(req.composite_mrz) > 1:
+        try:
+            comp_data = req.composite_mrz[:-1]
+            comp_cd = int(req.composite_mrz[-1])
+            composite_valid = calculate_icao_check_digit(comp_data) == comp_cd
+        except (ValueError, TypeError, IndexError):
+            composite_valid = False
+
+    overall = doc_valid and dob_valid and exp_valid and composite_valid
 
     return {
         "doc_number_valid": doc_valid,
         "dob_valid": dob_valid,
         "expiry_valid": exp_valid,
+        "composite_valid": composite_valid,
         "overall_icao_compliant": overall,
         "algorithm": "ICAO Doc 9303 (7-3-1 weight modulus 10)"
     }
