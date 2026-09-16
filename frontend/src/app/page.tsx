@@ -22,7 +22,7 @@ import {
   STAGE_1_DETAIN_FLOOR,
   SECONDARY_INSPECTION_FLOOR,
 } from '../lib/screeningEngine';
-import { ShieldCheck, RefreshCw, Smartphone, AlertCircle, AlertOctagon, Sparkles, RotateCcw } from 'lucide-react';
+import { ShieldCheck, RefreshCw, Smartphone, AlertCircle, AlertOctagon, Sparkles, RotateCcw, SlidersHorizontal } from 'lucide-react';
 
 const BLANK_TERMINAL_RESULT: VerificationResult = INITIAL_CLEAN_RESULT;
 
@@ -30,6 +30,7 @@ export default function Home() {
   const [activePreset, setActivePreset] = useState<ScenarioPreset | null>(null);
   const [currentResult, setCurrentResult] = useState<VerificationResult>(BLANK_TERMINAL_RESULT);
   const [isScanning, setIsScanning] = useState<boolean>(false);
+  const [showTechnicalDetails, setShowTechnicalDetails] = useState<boolean>(false);
   const [scanStatusText, setScanStatusText] = useState<string>('Analyzing document telemetry...');
   const [activeFocusModule, setActiveFocusModule] = useState<'PASSPORT' | 'TEXT' | 'PHOTO' | 'VISA' | null>(null);
   const [invalidDocAlert, setInvalidDocAlert] = useState<{
@@ -327,6 +328,18 @@ export default function Home() {
             </span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setShowTechnicalDetails((prev) => !prev)}
+              className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-lg border transition cursor-pointer shrink-0 ${
+                showTechnicalDetails
+                  ? 'bg-[#0A2540] text-white border-[#0A2540] shadow-xs'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300'
+              }`}
+              title="Toggle between Officer Plain View and Supervisor Technical Details"
+            >
+              <SlidersHorizontal className="w-3 h-3 text-current" />
+              <span>{showTechnicalDetails ? 'Hide Technical Details' : 'Show Technical Details'}</span>
+            </button>
             <span className="text-[11px] text-slate-500 hidden md:inline">
               Session Active: <strong className="text-slate-700 font-mono">SEC-SSB-2026</strong>
             </span>
@@ -390,20 +403,22 @@ export default function Home() {
         )}
 
         {/* 2. Interactive Document Bio-Page Viewer */}
-        <DocumentViewer result={currentResult} />
+        <DocumentViewer result={currentResult} showTechnicalDetails={showTechnicalDetails} />
 
         {/* 3. Multimodal AI Forensic Audit Card (Gemini 3.6 Flash) */}
         <AiReviewCard
           result={currentResult}
+          showTechnicalDetails={showTechnicalDetails}
           onApplyAiResult={handleApplyAiResult}
         />
 
         {/* 4. Automated 4-Module Screening Protocol */}
-        <VerificationChecklist result={currentResult} />
+        <VerificationChecklist result={currentResult} showTechnicalDetails={showTechnicalDetails} />
 
         {/* 5. Biometric 1:1 Facial Matcher */}
         <BiometricMatcher
           result={currentResult}
+          showTechnicalDetails={showTechnicalDetails}
           onUpdateBiometrics={handleUpdateBiometrics}
         />
 
@@ -414,12 +429,14 @@ export default function Home() {
           summary={currentResult.executiveSummary}
           qrDetails={currentResult.qrDetails}
           pixelForensics={currentResult.pixelForensics}
+          showTechnicalDetails={showTechnicalDetails}
         />
       </main>
 
       {/* Sticky Quick-Action Dock with Next Passenger Reset */}
       <ActionDock
         result={currentResult}
+        showTechnicalDetails={showTechnicalDetails}
         onResetTerminal={handleResetTerminal}
       />
     </div>

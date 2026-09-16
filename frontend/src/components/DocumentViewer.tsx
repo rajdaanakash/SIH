@@ -6,9 +6,10 @@ import { Eye, ShieldAlert, FileText, Layers, BookOpen, FileCheck2, CheckCircle2,
 
 interface Props {
   result: VerificationResult;
+  showTechnicalDetails?: boolean;
 }
 
-export default function DocumentViewer({ result }: Props) {
+export default function DocumentViewer({ result, showTechnicalDetails = false }: Props) {
   const [viewMode, setViewMode] = useState<'FORENSIC' | 'ELA' | 'PLAIN'>('FORENSIC');
   const [activeDocTab, setActiveDocTab] = useState<'PASSPORT' | 'VISA'>('PASSPORT');
 
@@ -24,20 +25,24 @@ export default function DocumentViewer({ result }: Props) {
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <div>
           <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 flex-wrap">
-            <span>{activeDocTab === 'VISA' ? 'ENTRY VISA SPECIMEN' : `${result.documentType} SPECIMEN`}</span>
+            <span>
+              {showTechnicalDetails
+                ? (activeDocTab === 'VISA' ? 'ENTRY VISA SPECIMEN' : `${result.documentType} SPECIMEN`)
+                : (activeDocTab === 'VISA' ? 'Visa Document' : 'Passport Document')}
+            </span>
             <span>•</span>
-            <span>TRANSIT TOKEN</span>
+            <span>{showTechnicalDetails ? 'TRANSIT TOKEN' : 'Reference Number'}</span>
             {result.isIndianNational ? (
               <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
-                INDIAN CITIZEN (VISA EXEMPT)
+                {showTechnicalDetails ? 'INDIAN CITIZEN (VISA EXEMPT)' : 'Indian Citizen — No Visa Needed'}
               </span>
             ) : hasVisa ? (
               <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
-                DUAL DOC (PASSPORT+VISA)
+                {showTechnicalDetails ? 'DUAL DOC (PASSPORT+VISA)' : 'Passport + Visa Attached'}
               </span>
             ) : result.requiresVisa ? (
               <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300">
-                FOREIGN ({result.extractedFields.nationality || 'INTL'}) • VISA REQUIRED
+                {showTechnicalDetails ? `FOREIGN (${result.extractedFields.nationality || 'INTL'}) • VISA REQUIRED` : 'Foreign Citizen — Valid Indian Visa Required'}
               </span>
             ) : null}
           </div>
@@ -84,8 +89,7 @@ export default function DocumentViewer({ result }: Props) {
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <span className="sm:hidden">Forensic</span>
-              <span className="hidden sm:inline">Forensic Boxes</span>
+              <span>{showTechnicalDetails ? 'Forensic Boxes' : 'Highlight Changes'}</span>
             </button>
             <button
               onClick={() => setViewMode('ELA')}
@@ -95,8 +99,7 @@ export default function DocumentViewer({ result }: Props) {
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <span className="sm:hidden">ELA Map</span>
-              <span className="hidden sm:inline">ELA Heatmap</span>
+              <span>{showTechnicalDetails ? 'ELA Heatmap' : 'Editing Heatmap'}</span>
             </button>
             <button
               onClick={() => setViewMode('PLAIN')}
@@ -106,8 +109,7 @@ export default function DocumentViewer({ result }: Props) {
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <span className="sm:hidden">Plain</span>
-              <span className="hidden sm:inline">Plain Scan</span>
+              <span>{showTechnicalDetails ? 'Plain Scan' : 'Original Photo'}</span>
             </button>
           </div>
         </div>
@@ -119,11 +121,13 @@ export default function DocumentViewer({ result }: Props) {
           <ShieldAlert className="w-5 h-5 text-rose-700 shrink-0 mt-0.5" />
           <div>
             <div className="text-xs font-black uppercase tracking-wider text-rose-800 flex items-center gap-1.5">
-              <span>FRAUD DETECTED: DUPLICATE SPECIMEN INGESTION</span>
-              <span className="px-1.5 py-0.2 rounded bg-rose-700 text-white text-[9px] font-bold">DETAIN</span>
+              <span>{showTechnicalDetails ? 'FRAUD DETECTED: DUPLICATE SPECIMEN INGESTION' : 'Stop — Same Image Uploaded Twice'}</span>
+              <span className="px-1.5 py-0.2 rounded bg-rose-700 text-white text-[9px] font-bold">
+                {showTechnicalDetails ? 'DETAIN' : 'STOP'}
+              </span>
             </div>
             <div className="text-[11px] font-semibold text-rose-700 mt-0.5">
-              The identical document file/image was submitted for both the Passport and Visa slots. A valid primary passport booklet and a separate valid entry visa are required.
+              Same image uploaded twice: The identical image was submitted for both the Passport and Visa slots. A separate valid passport booklet and a valid entry visa are required.
             </div>
           </div>
         </div>
@@ -134,11 +138,13 @@ export default function DocumentViewer({ result }: Props) {
           <ShieldAlert className="w-5 h-5 text-rose-700 shrink-0 mt-0.5" />
           <div>
             <div className="text-xs font-black uppercase tracking-wider text-rose-800 flex items-center gap-1.5">
-              <span>CRITICAL BORDER VIOLATION: TRAVEL DOCUMENT IS EXPIRED</span>
-              <span className="px-1.5 py-0.2 rounded bg-rose-700 text-white text-[9px] font-bold">TRANSIT DENIED</span>
+              <span>{showTechnicalDetails ? 'CRITICAL BORDER VIOLATION: TRAVEL DOCUMENT IS EXPIRED' : 'Stop — Travel Document Has Expired'}</span>
+              <span className="px-1.5 py-0.2 rounded bg-rose-700 text-white text-[9px] font-bold">
+                {showTechnicalDetails ? 'TRANSIT DENIED' : 'EXPIRED'}
+              </span>
             </div>
             <div className="text-[11px] font-semibold text-rose-700 mt-0.5">
-              Document Expiry Date: <strong className="underline">{extractedFields.expiryDate}</strong> {result.expiryYearsExpired ? `(~${result.expiryYearsExpired} years in the past relative to current year 2026)` : '(Date is in the past)'}. Entry is prohibited under Section 3 of the Passports Act.
+              Document has expired: This travel document expired on <strong className="underline">{extractedFields.expiryDate}</strong>. Expired documents cannot be used to travel.
             </div>
           </div>
         </div>
@@ -149,11 +155,13 @@ export default function DocumentViewer({ result }: Props) {
           <AlertTriangle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
           <div>
             <div className="text-xs font-black uppercase tracking-wider text-amber-800 flex items-center gap-1.5">
-              <span>INVALID PRIMARY SPECIMEN: VISA STICKER IN PASSPORT SLOT</span>
-              <span className="px-1.5 py-0.2 rounded bg-amber-700 text-white text-[9px] font-bold">INVALID DOC</span>
+              <span>{showTechnicalDetails ? 'INVALID PRIMARY SPECIMEN: VISA STICKER IN PASSPORT SLOT' : 'Needs Review — Visa Sticker Uploaded Instead of Passport'}</span>
+              <span className="px-1.5 py-0.2 rounded bg-amber-700 text-white text-[9px] font-bold">
+                {showTechnicalDetails ? 'INVALID DOC' : 'NEEDS REVIEW'}
+              </span>
             </div>
             <div className="text-[11px] font-semibold text-amber-800 mt-0.5">
-              A Visa sticker/foil was uploaded into the Passport slot. A national Passport booklet is mandatory for international border crossing.
+              Wrong document type: A visa sticker was uploaded into the Passport slot. A national passport booklet is required for international border crossing.
             </div>
           </div>
         </div>
@@ -164,11 +172,13 @@ export default function DocumentViewer({ result }: Props) {
           <ShieldAlert className="w-5 h-5 text-rose-700 shrink-0 mt-0.5" />
           <div>
             <div className="text-xs font-black uppercase tracking-wider text-rose-800 flex items-center gap-1.5">
-              <span>CRITICAL FRAUD: DUMMY / SPECIMEN PASSPORT DETECTED</span>
-              <span className="px-1.5 py-0.2 rounded bg-rose-700 text-white text-[9px] font-bold">CRIMINAL FRAUD</span>
+              <span>{showTechnicalDetails ? 'CRITICAL FRAUD: DUMMY / SPECIMEN PASSPORT DETECTED' : 'Stop — Sample or Template Document Detected'}</span>
+              <span className="px-1.5 py-0.2 rounded bg-rose-700 text-white text-[9px] font-bold">
+                {showTechnicalDetails ? 'CRIMINAL FRAUD' : 'FAKE DOC'}
+              </span>
             </div>
             <div className="text-[11px] font-semibold text-rose-700 mt-0.5">
-              Document Number <strong className="underline font-mono">{extractedFields.documentNumber}</strong> / Name <strong className="underline">{extractedFields.fullName}</strong> is an unauthenticated internet sample mockup template. Fake/dummy documents presented at border control trigger immediate criminal detention under Section 12 of the Passports Act.
+              Sample document detected: Document #{extractedFields.documentNumber} is an unauthenticated sample/template document, not a real government document.
             </div>
           </div>
         </div>
@@ -179,11 +189,13 @@ export default function DocumentViewer({ result }: Props) {
           <AlertTriangle className="w-5 h-5 text-rose-700 shrink-0 mt-0.5" />
           <div>
             <div className="text-xs font-black uppercase tracking-wider text-rose-800 flex items-center gap-1.5">
-              <span>ICAO DOC 9303 CHECKSUM FRAUD: 7-3-1 CHECK DIGITS FAILED</span>
-              <span className="px-1.5 py-0.2 rounded bg-rose-700 text-white text-[9px] font-bold">CHECKSUM FAIL</span>
+              <span>{showTechnicalDetails ? 'ICAO DOC 9303 CHECKSUM FRAUD: 7-3-1 CHECK DIGITS FAILED' : 'Stop — Security Code Check Failed'}</span>
+              <span className="px-1.5 py-0.2 rounded bg-rose-700 text-white text-[9px] font-bold">
+                {showTechnicalDetails ? 'CHECKSUM FAIL' : 'FAILED'}
+              </span>
             </div>
             <div className="text-[11px] font-semibold text-rose-700 mt-0.5">
-              Mathematical check-digit calculation failed across MRZ Line 2. {result.icaoDetails.notes.slice(0, 2).join(' ')}
+              Security numbers do not match: The numbers on the document don't add up correctly, which usually means it has been altered or is fake.
             </div>
           </div>
         </div>
@@ -194,11 +206,13 @@ export default function DocumentViewer({ result }: Props) {
           <AlertTriangle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
           <div>
             <div className="text-xs font-black uppercase tracking-wider text-amber-800 flex items-center gap-1.5">
-              <span>DATA CONTRADICTION: VIZ VS MRZ FIELD MISMATCH</span>
-              <span className="px-1.5 py-0.2 rounded bg-amber-700 text-white text-[9px] font-bold">DISCREPANCY</span>
+              <span>{showTechnicalDetails ? 'DATA CONTRADICTION: VIZ VS MRZ FIELD MISMATCH' : "Needs Review — Printed Details Don't Match Security Code"}</span>
+              <span className="px-1.5 py-0.2 rounded bg-amber-700 text-white text-[9px] font-bold">
+                {showTechnicalDetails ? 'DISCREPANCY' : 'MISMATCH'}
+              </span>
             </div>
             <div className="text-[11px] font-semibold text-amber-800 mt-0.5">
-              Visual zone text directly contradicts machine-readable optical encoding (e.g. Visual DOB vs MRZ DOB mismatch).
+              Data mismatch: The printed details on the document do not match the document's built-in security code.
             </div>
           </div>
         </div>
@@ -209,11 +223,13 @@ export default function DocumentViewer({ result }: Props) {
           <AlertTriangle className="w-5 h-5 text-rose-700 shrink-0 mt-0.5" />
           <div>
             <div className="text-xs font-black uppercase tracking-wider text-rose-800 flex items-center gap-1.5">
-              <span>JURISDICTION REJECTION: FOREIGN VISA PRESENTED AT INDIAN BORDER</span>
-              <span className="px-1.5 py-0.2 rounded bg-rose-700 text-white text-[9px] font-bold">REJECTED</span>
+              <span>{showTechnicalDetails ? 'JURISDICTION REJECTION: FOREIGN VISA PRESENTED AT INDIAN BORDER' : "Stop — Wrong Country's Visa Presented"}</span>
+              <span className="px-1.5 py-0.2 rounded bg-rose-700 text-white text-[9px] font-bold">
+                {showTechnicalDetails ? 'REJECTED' : 'WRONG VISA'}
+              </span>
             </div>
             <div className="text-[11px] font-semibold text-rose-700 mt-0.5">
-              Presented Visa was issued by a foreign nation (e.g. United States). Entering the Republic of India strictly requires a valid Indian Entry Visa / e-Visa issued by the Government of India.
+              Wrong country visa: A foreign country's visa was presented. Entering India requires a valid Indian entry visa issued by the Government of India.
             </div>
           </div>
         </div>
@@ -294,10 +310,10 @@ export default function DocumentViewer({ result }: Props) {
           <div className="flex items-center justify-between border-b border-slate-200 pb-2">
             <div className="flex items-center gap-1.5">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-900">
-                Passport ↔ Visa Cross-Reconciliation Matrix
+                {showTechnicalDetails ? 'Passport ↔ Visa Cross-Reconciliation Matrix' : 'Passport & Visa Cross-Check'}
               </span>
               <span className="text-[9.5px] px-1.5 py-0.2 rounded bg-blue-100 text-blue-900 font-bold border border-blue-200">
-                MHA IVFRT
+                {showTechnicalDetails ? 'MHA IVFRT' : 'Match Check'}
               </span>
             </div>
             <span
@@ -314,14 +330,14 @@ export default function DocumentViewer({ result }: Props) {
               }`}
             >
               {result.isDuplicateDocument
-                ? '⚠️ FRAUD / DUPLICATE UPLOAD'
+                ? (showTechnicalDetails ? '⚠️ FRAUD / DUPLICATE UPLOAD' : '⚠️ Same File Uploaded Twice')
                 : result.isExpired
-                ? '⚠️ SPECIMEN EXPIRED'
+                ? (showTechnicalDetails ? '⚠️ SPECIMEN EXPIRED' : '⚠️ Document Expired')
                 : result.isInvalidJurisdiction
-                ? '⚠️ JURISDICTION REJECTED'
+                ? (showTechnicalDetails ? '⚠️ JURISDICTION REJECTED' : '⚠️ Wrong Country Visa')
                 : visaDetails.overallCrossCheckPassed !== false
-                ? '✓ 100% CORRELATED'
-                : '⚠️ CROSS-CHECK MISMATCH'}
+                ? (showTechnicalDetails ? '✓ 100% CORRELATED' : '✓ Details Match')
+                : (showTechnicalDetails ? '⚠️ CROSS-CHECK MISMATCH' : '⚠️ Details Do Not Match')}
             </span>
           </div>
 
@@ -335,7 +351,7 @@ export default function DocumentViewer({ result }: Props) {
                 {result.isDuplicateDocument ? (
                   <>
                     <XCircle className="w-3 h-3 shrink-0" />
-                    <span>Identical File Injected</span>
+                    <span>Duplicate File</span>
                   </>
                 ) : (
                   <>
@@ -347,7 +363,9 @@ export default function DocumentViewer({ result }: Props) {
             </div>
 
             <div className="p-2 rounded-lg bg-white border border-slate-200">
-              <span className="text-[10px] font-bold text-slate-500 block uppercase">Passport # Link</span>
+              <span className="text-[10px] font-bold text-slate-500 block uppercase">
+                {showTechnicalDetails ? 'Passport # Link' : 'Passport Number'}
+              </span>
               <div className="font-mono font-bold text-slate-900 truncate">
                 {visaDetails.passportNumberLinked || extractedFields.documentNumber}
               </div>
@@ -357,7 +375,7 @@ export default function DocumentViewer({ result }: Props) {
                 {result.isDuplicateDocument ? (
                   <>
                     <XCircle className="w-3 h-3 shrink-0" />
-                    <span>Duplicate Bypass Attempt</span>
+                    <span>Duplicate</span>
                   </>
                 ) : visaDetails.passportMatched !== false ? (
                   <>
@@ -374,7 +392,9 @@ export default function DocumentViewer({ result }: Props) {
             </div>
 
             <div className="p-2 rounded-lg bg-white border border-slate-200">
-              <span className="text-[10px] font-bold text-slate-500 block uppercase">Visa Endorsement</span>
+              <span className="text-[10px] font-bold text-slate-500 block uppercase">
+                {showTechnicalDetails ? 'Visa Endorsement' : 'Visa Type'}
+              </span>
               <div className="font-bold text-slate-900 truncate">{visaDetails.visaType || 'TOURIST'}</div>
               <div className="text-[9.5px] text-slate-600 truncate mt-0.5">
                 Stay: {visaDetails.stayDurationDays || 30} Days • {visaDetails.entryValidity || 'MULTIPLE'}
@@ -382,7 +402,9 @@ export default function DocumentViewer({ result }: Props) {
             </div>
 
             <div className="p-2 rounded-lg bg-white border border-slate-200">
-              <span className="text-[10px] font-bold text-slate-500 block uppercase">Visa Validity</span>
+              <span className="text-[10px] font-bold text-slate-500 block uppercase">
+                {showTechnicalDetails ? 'Visa Validity' : 'Visa Valid Until'}
+              </span>
               <div className={`font-bold truncate ${result.isExpired ? 'text-rose-700' : 'text-slate-900'}`}>
                 {visaDetails.validUntil || extractedFields.expiryDate || 'Active'}
               </div>
@@ -392,12 +414,12 @@ export default function DocumentViewer({ result }: Props) {
                 {result.isExpired ? (
                   <>
                     <XCircle className="w-3 h-3 shrink-0" />
-                    <span>EXPIRED ({result.expiryYearsExpired ? `~${result.expiryYearsExpired} yrs` : 'Invalid'})</span>
+                    <span>Expired</span>
                   </>
                 ) : (
                   <>
                     <CheckCircle2 className="w-3 h-3 shrink-0" />
-                    <span>Before Passport Expiry</span>
+                    <span>Valid Date</span>
                   </>
                 )}
               </div>

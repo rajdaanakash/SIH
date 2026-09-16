@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import { RiskLevel } from '../lib/types';
+import { RiskLevel, VerificationResult } from '../lib/types';
+import { getPlainVerdict } from '../lib/plainLanguage';
 import { ShieldCheck, AlertTriangle, AlertOctagon } from 'lucide-react';
 
 interface Props {
@@ -10,9 +11,19 @@ interface Props {
   summary: string;
   qrDetails?: any;
   pixelForensics?: any;
+  result?: VerificationResult;
+  showTechnicalDetails?: boolean;
 }
 
-export default function RiskMeter({ score, level, summary, qrDetails, pixelForensics }: Props) {
+export default function RiskMeter({
+  score,
+  level,
+  summary,
+  qrDetails,
+  pixelForensics,
+  result,
+  showTechnicalDetails = false,
+}: Props) {
   const isLow = level === 'LOW';
   const isMedium = level === 'MEDIUM';
 
@@ -23,25 +34,40 @@ export default function RiskMeter({ score, level, summary, qrDetails, pixelForen
     ? 'bg-amber-50 text-amber-900 border-amber-300'
     : 'bg-rose-50 text-rose-900 border-rose-300';
 
+  // Plain-language verdict info if result is passed
+  const plainInfo = result
+    ? getPlainVerdict(result)
+    : {
+        label: isLow
+          ? 'Approve — Clear to Enter'
+          : isMedium
+          ? 'Needs a Closer Look — Send to Secondary'
+          : 'Stop — Do Not Allow Entry',
+        oneLineReason: summary || (isLow ? 'All security checks passed.' : 'Security review required.'),
+        badgeClass: badgeStyle,
+      };
+
   return (
     <div className="bg-white rounded-xl p-3.5 sm:p-4 shadow-xs border border-slate-200 space-y-2.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-          <span>Composite Threat Risk Index</span>
+          <span>{showTechnicalDetails ? 'Composite Threat Risk Index' : 'Overall Result'}</span>
           <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-300 font-semibold">
-            MHA Standard
+            {showTechnicalDetails ? 'MHA Standard' : 'Officer Guidance'}
           </span>
         </span>
-        <div className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded border text-xs font-black uppercase ${badgeStyle}`}>
+        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded border text-xs font-black uppercase ${plainInfo.badgeClass}`}>
           {isLow ? (
-            <ShieldCheck className="w-4 h-4 text-emerald-700" />
+            <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" />
           ) : isMedium ? (
-            <AlertTriangle className="w-4 h-4 text-amber-700" />
+            <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
           ) : (
-            <AlertOctagon className="w-4 h-4 text-rose-700" />
+            <AlertOctagon className="w-4 h-4 text-rose-700 shrink-0" />
           )}
           <span>
-            {isLow ? 'LOW RISK (CLEARED)' : isMedium ? 'MEDIUM RISK (SECONDARY)' : 'HIGH RISK (CRITICAL THREAT)'}
+            {showTechnicalDetails
+              ? (isLow ? 'LOW RISK (CLEARED)' : isMedium ? 'MEDIUM RISK (SECONDARY)' : 'HIGH RISK (CRITICAL THREAT)')
+              : plainInfo.label}
           </span>
         </div>
       </div>
@@ -53,38 +79,46 @@ export default function RiskMeter({ score, level, summary, qrDetails, pixelForen
         />
       </div>
 
-      <div className="flex items-center justify-between text-[11px]">
-        <span className="font-mono text-slate-600">Risk Score: <strong className="text-slate-900 font-bold">{score} / 100</strong></span>
-        <span className="text-slate-600 font-medium line-clamp-1 max-w-[280px] sm:max-w-none">{summary}</span>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-1">
+        <span className="text-slate-700 font-medium leading-relaxed">
+          {plainInfo.oneLineReason}
+        </span>
+        {showTechnicalDetails && (
+          <span className="font-mono text-slate-900 font-bold shrink-0 text-right">
+            Risk Score: <strong className="text-slate-900">{score} / 100</strong>
+          </span>
+        )}
       </div>
 
-      {/* Discrete Forensic Hardware Signals (Directive 4) */}
-      <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100 text-[10px]">
-        <div className="flex items-center justify-between px-2 py-1 rounded bg-slate-50 border border-slate-200">
-          <span className="font-semibold text-slate-600">Aadhaar QR Crypto:</span>
-          <span className={`font-black ${
-            qrDetails?.status === 'VERIFIED'
-              ? 'text-emerald-700'
-              : qrDetails?.status === 'SIGNATURE_INVALID' || qrDetails?.status === 'DATA_MISMATCH'
-              ? 'text-rose-700'
-              : 'text-slate-500'
-          }`}>
-            {qrDetails?.status || 'NOT SCANNED'}
-          </span>
+      {/* Discrete Forensic Hardware Signals (Audit View Only) */}
+      {showTechnicalDetails && (
+        <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100 text-[10px]">
+          <div className="flex items-center justify-between px-2 py-1 rounded bg-slate-50 border border-slate-200">
+            <span className="font-semibold text-slate-600">Aadhaar QR Crypto:</span>
+            <span className={`font-black ${
+              qrDetails?.status === 'VERIFIED'
+                ? 'text-emerald-700'
+                : qrDetails?.status === 'SIGNATURE_INVALID' || qrDetails?.status === 'DATA_MISMATCH'
+                ? 'text-rose-700'
+                : 'text-slate-500'
+            }`}>
+              {qrDetails?.status || 'NOT SCANNED'}
+            </span>
+          </div>
+          <div className="flex items-center justify-between px-2 py-1 rounded bg-slate-50 border border-slate-200">
+            <span className="font-semibold text-slate-600">Pixel Forensics (CV):</span>
+            <span className={`font-black ${
+              pixelForensics?.forensicVerdict === 'TAMPERED'
+                ? 'text-rose-700'
+                : pixelForensics?.forensicVerdict === 'SUSPICIOUS'
+                ? 'text-amber-700'
+                : 'text-emerald-700'
+            }`}>
+              {pixelForensics?.overallTamperScore !== undefined ? `${pixelForensics.overallTamperScore}/100` : 'CALIBRATED'}
+            </span>
+          </div>
         </div>
-        <div className="flex items-center justify-between px-2 py-1 rounded bg-slate-50 border border-slate-200">
-          <span className="font-semibold text-slate-600">Pixel Forensics (CV):</span>
-          <span className={`font-black ${
-            pixelForensics?.forensicVerdict === 'TAMPERED'
-              ? 'text-rose-700'
-              : pixelForensics?.forensicVerdict === 'SUSPICIOUS'
-              ? 'text-amber-700'
-              : 'text-emerald-700'
-          }`}>
-            {pixelForensics?.overallTamperScore !== undefined ? `${pixelForensics.overallTamperScore}/100` : 'CALIBRATED'}
-          </span>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

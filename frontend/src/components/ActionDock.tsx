@@ -7,10 +7,11 @@ import { Check, AlertTriangle, ShieldAlert, FileDown, CheckCircle2, RotateCcw } 
 
 interface Props {
   result: VerificationResult;
+  showTechnicalDetails?: boolean;
   onResetTerminal?: () => void;
 }
 
-export default function ActionDock({ result, onResetTerminal }: Props) {
+export default function ActionDock({ result, showTechnicalDetails = false, onResetTerminal }: Props) {
   const [cleared, setCleared] = useState<boolean>(false);
 
   const handleApprove = () => {
@@ -63,10 +64,10 @@ export default function ActionDock({ result, onResetTerminal }: Props) {
             <button
               onClick={() => alert('Passenger transferred to Secondary Inspection Officer for manual interrogation.')}
               className="py-1.5 px-1 rounded-lg text-[11px] font-semibold bg-amber-50 hover:bg-amber-100 active:bg-amber-200 text-amber-900 border border-amber-300 flex items-center justify-center gap-1 transition cursor-pointer"
-              title="Flag for secondary interview"
+              title="Send to Secondary Inspection"
             >
               <AlertTriangle className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-              <span>Review</span>
+              <span>Secondary</span>
             </button>
           </div>
 
@@ -82,7 +83,7 @@ export default function ActionDock({ result, onResetTerminal }: Props) {
                 className="w-full py-2.5 rounded-lg text-xs font-black bg-rose-700 hover:bg-rose-800 active:bg-rose-900 text-white shadow-sm flex items-center justify-center gap-2 transition animate-pulse cursor-pointer"
               >
                 <ShieldAlert className="w-4 h-4 shrink-0" />
-                <span>DETAIN TRAVELER</span>
+                <span>STOP — DO NOT ALLOW ENTRY</span>
               </button>
             ) : result.verdict === 'SECONDARY_INSPECTION' || result.isAlreadyCompromised ? (
               <button
@@ -90,7 +91,7 @@ export default function ActionDock({ result, onResetTerminal }: Props) {
                 className="w-full py-2.5 rounded-lg text-xs font-black bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white shadow-sm flex items-center justify-center gap-2 transition cursor-pointer"
               >
                 <AlertTriangle className="w-4 h-4 shrink-0" />
-                <span>TRANSFER TO SECONDARY INSPECTION</span>
+                <span>SEND TO SECONDARY INSPECTION</span>
               </button>
             ) : result.verdict === 'CLEAR' && !result.isAlreadyCompromised ? (
               <button
@@ -102,7 +103,7 @@ export default function ActionDock({ result, onResetTerminal }: Props) {
                 }`}
               >
                 <Check className="w-4 h-4 shrink-0" />
-                <span>{cleared ? 'TRANSIT APPROVED ✓' : 'APPROVE & CLEAR TRANSIT'}</span>
+                <span>{cleared ? 'CLEAR TO ENTER ✓' : 'APPROVE — CLEAR TO ENTER'}</span>
               </button>
             ) : (
               <div className="w-full py-2.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-400 border border-slate-200 flex items-center justify-center gap-2 select-none">
@@ -132,16 +133,17 @@ export default function ActionDock({ result, onResetTerminal }: Props) {
               <button
                 onClick={onResetTerminal}
                 className="px-3 py-2 rounded-lg text-xs font-bold bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 flex items-center gap-1.5 transition cursor-pointer shrink-0 shadow-2xs"
-                title="Reset form for next passenger"
+                title="Reset form for next traveler"
               >
                 <RotateCcw className="w-3.5 h-3.5 text-[#0A2540]" />
-                <span>Next Passenger</span>
+                <span>Next Traveler</span>
               </button>
             )}
 
             <button
               onClick={handleExportPdf}
               className="px-3 py-2 rounded-lg text-xs font-bold bg-white hover:bg-slate-100 text-[#0A2540] border border-[#0A2540]/30 flex items-center gap-1.5 transition cursor-pointer shrink-0 shadow-2xs"
+              title="Exports Section 65B court-admissible audit record with full technical details"
             >
               <FileDown className="w-3.5 h-3.5 text-[#0A2540]" />
               <span className="hidden sm:inline">Export</span>
@@ -153,7 +155,7 @@ export default function ActionDock({ result, onResetTerminal }: Props) {
               className="px-3 py-2 rounded-lg text-xs font-semibold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1.5 transition cursor-pointer shrink-0"
             >
               <AlertTriangle className="w-3.5 h-3.5 text-amber-700" />
-              <span>Secondary Review</span>
+              <span>Secondary Inspection</span>
             </button>
 
             {result.isTerminalBlank || result.verdict === 'UNDETERMINED' ? (
@@ -166,7 +168,7 @@ export default function ActionDock({ result, onResetTerminal }: Props) {
                 className="px-4 py-2 rounded-lg text-xs font-black bg-rose-700 hover:bg-rose-800 text-white shadow-sm flex items-center gap-1.5 transition animate-pulse cursor-pointer shrink-0"
               >
                 <ShieldAlert className="w-4 h-4" />
-                <span>DETAIN TRAVELER</span>
+                <span>STOP — DO NOT ALLOW ENTRY</span>
               </button>
             ) : result.verdict === 'SECONDARY_INSPECTION' || result.isAlreadyCompromised ? (
               <button
@@ -174,7 +176,7 @@ export default function ActionDock({ result, onResetTerminal }: Props) {
                 className="px-4 py-2 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-sm flex items-center gap-1.5 transition cursor-pointer shrink-0"
               >
                 <AlertTriangle className="w-4 h-4" />
-                <span>TRANSFER TO SECONDARY</span>
+                <span>SEND TO SECONDARY INSPECTION</span>
               </button>
             ) : result.verdict === 'CLEAR' && !result.isAlreadyCompromised ? (
               <button
@@ -184,7 +186,7 @@ export default function ActionDock({ result, onResetTerminal }: Props) {
                 }`}
               >
                 <Check className="w-4 h-4" />
-                <span>{cleared ? 'APPROVED ✓' : 'APPROVE & CLEAR TRANSIT'}</span>
+                <span>{cleared ? 'CLEAR TO ENTER ✓' : 'APPROVE — CLEAR TO ENTER'}</span>
               </button>
             ) : (
               <div className="px-4 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-400 border border-slate-200 flex items-center gap-1.5 shrink-0 select-none">

@@ -16,10 +16,11 @@
 | **4** | Structural VLM Non-Authoritative Invariant | **COMPLETED** | `route.ts`, `types.ts`, `AiReviewCard.tsx`, `RiskMeter.tsx` | Relabeled throughout UI as `AI_VISUAL_DESCRIPTION (non-authoritative)` with `SUPPLEMENTARY CONTEXT ONLY` badge. VLM response schema stripped of authority over clearance verdicts. |
 | **5** | Biometric Override Bug Fix | **COMPLETED** | `screeningEngine.ts`, `ActionDock.tsx`, `page.tsx` | Permanent `isAlreadyCompromised` lock extended to Stage 2 (`SECONDARY_INSPECTION_FLOOR = 60`). Biometrics can never lower riskScore or upgrade verdict to `CLEAR`. "APPROVE & CLEAR TRANSIT" button disabled/hidden. |
 | **6** | Python Forensic Dependencies | **COMPLETED** | `backend/requirements.txt` | `opencv-python-headless`, `pyzbar`, `cryptography`, `onnxruntime` pinned and verified in local environment. |
+| **7** | Officer-Facing UI Plain-Language Overhaul | **COMPLETED** | `plainLanguage.ts`, `VerificationChecklist.tsx`, `RiskMeter.tsx`, `BiometricMatcher.tsx`, `DocumentViewer.tsx`, `AiReviewCard.tsx`, `ActionDock.tsx`, `page.tsx`, `officerUiPlainLanguage.test.ts` | Presentation-layer plain-language translation engine with dual-view architecture. Default officer view delivers 3-second rapid actionable clarity (no raw acronyms or error codes). Opt-in supervisor audit toggle exposes full forensic terminology (ICAO 9303 7-3-1 modulus 10, ELA variance, RSA-2048, CV copy-move). Underneath, zero mathematical mutations; Section 65B PDF dossier export remains byte-for-byte intact. |
 
 ---
 
-## Verification & Test Scenarios Matrix (19/19 Vitest + 3/3 Python Passing)
+## Verification & Test Scenarios Matrix (25/25 Vitest + 3/3 Python Passing)
 
 - [x] **Scenario 1**: Duplicate passport/visa payload byte duplicate → `DETAIN` (`ERR_DUPLICATE_INGESTION`, riskScore 98).
 - [x] **Scenario 2**: Expired (2006) document with 99% biometric match → `DETAIN` (`ERR_DOCUMENT_EXPIRED`, riskScore >= 95, biometric cannot clear).
@@ -40,11 +41,17 @@
 - [x] **Directive 1 (Test 4)**: Corrupted or glare-obscured QR → `SECONDARY_INSPECTION` (`ERR_QR_UNREADABLE`), NOT automatic detain.
 - [x] **Directive 2 & 3 (Test 5)**: Copy-move manipulation flagged by Tier 1 pixel forensics → `DETAIN` (score 98), cannot resolve to `CLEAR`.
 - [x] **Directive 4 (Test 6)**: VLM non-authoritative structural guarantee: VLM returning "CLEAR" cannot override failing QR or forensic checks.
+- [x] **Directive 7 (Test 1)**: All 5 steps render plain "Step N: [Plain Name]" on default view without raw acronyms.
+- [x] **Directive 7 (Test 2)**: Failed checks render plain format `[Check name]: [Passed/Failed/Needs Review] — [one plain reason]`.
+- [x] **Directive 7 (Test 2b)**: Exhaustive translation of all 12 security error codes to unambiguous, jargon-free explanations.
+- [x] **Directive 7 (Test 3)**: Supervisor toggle exposes full technical audit terms (ICAO 9303 7-3-1 modulus 10, ELA, copy-move) with zero verdict mutation.
+- [x] **Directive 7 (Test 4)**: Section 65B PDF dossier generator maintains 100% legal forensic audit fidelity.
+- [x] **Directive 7 (Test 5)**: 3-state verdict alignment (Approve — Clear to Enter [green], Needs a Closer Look — Send to Secondary [amber], Stop — Do Not Allow Entry [red]).
 
 ---
 
 ## Build Verification
-- `next build` (Turbopack): Compiled in 1.2s, TypeScript finished in 3.9s with 0 errors. Static generation (6/6) complete.
-- Vitest suite: `frontend/tests/terminalHardening.test.ts` (19 / 19 tests passing in ~600ms).
+- `next build` (Turbopack): Compiled in 1.2s, TypeScript finished in 3.5s with 0 errors. Static generation (6/6) complete.
+- Vitest suite: 25 / 25 tests passing across `terminalHardening.test.ts` (19 tests) and `officerUiPlainLanguage.test.ts` (6 tests) in ~720ms.
 - Python backend test suite: `backend/qr` & `backend/forensics` (3 / 3 test cases passing in 0.45s).
 

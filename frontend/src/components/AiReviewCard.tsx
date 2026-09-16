@@ -7,10 +7,11 @@ import { ensureJpegBase64 } from '../lib/imageUtils';
 
 interface Props {
   result: VerificationResult;
+  showTechnicalDetails?: boolean;
   onApplyAiResult?: (aiData: any) => void;
 }
 
-export default function AiReviewCard({ result, onApplyAiResult }: Props) {
+export default function AiReviewCard({ result, showTechnicalDetails = false, onApplyAiResult }: Props) {
   const [loading, setLoading] = useState<boolean>(false);
   const [aiAnalysis, setAiAnalysis] = useState<any>(null);
   const [isLiveAi, setIsLiveAi] = useState<boolean | null>(null);
@@ -115,13 +116,17 @@ export default function AiReviewCard({ result, onApplyAiResult }: Props) {
           </div>
           <div>
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-              <span>Multimodal AI Forensic Audit</span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-900 border border-blue-200 font-bold">
-                {aiAnalysis?.provider || 'Groq LPU / Gemini Vision'}
-              </span>
+              <span>{showTechnicalDetails ? 'Multimodal AI Forensic Audit' : 'Automated Photo Review (supplementary)'}</span>
+              {showTechnicalDetails ? (
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-900 border border-blue-200 font-bold">
+                  {aiAnalysis?.provider || 'Groq LPU / Gemini Vision'}
+                </span>
+              ) : null}
             </h3>
             <span className="text-[10px] text-slate-500 block">
-              Automated Forensic Cognitive Vision • Semantic Forgery Verification
+              {showTechnicalDetails
+                ? 'Automated Forensic Cognitive Vision • Semantic Forgery Verification'
+                : 'Supplementary visual analysis — clearance is decided by security checks above'}
             </span>
           </div>
         </div>
@@ -130,7 +135,7 @@ export default function AiReviewCard({ result, onApplyAiResult }: Props) {
           {activeAnalysis && (
             <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-300">
               <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-              <span>Auto-Executed on Upload</span>
+              <span>{showTechnicalDetails ? 'Auto-Executed on Upload' : 'Completed Automatically'}</span>
             </span>
           )}
           <button
@@ -155,7 +160,7 @@ export default function AiReviewCard({ result, onApplyAiResult }: Props) {
             ) : (
               <>
                 <RefreshCw className="w-3.5 h-3.5 text-blue-300" />
-                <span>Re-Audit Specimen</span>
+                <span>{showTechnicalDetails ? 'Re-Audit Specimen' : 'Re-check Document'}</span>
               </>
             )}
           </button>
@@ -166,25 +171,30 @@ export default function AiReviewCard({ result, onApplyAiResult }: Props) {
         <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-2.5 text-xs">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-2 gap-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-bold text-slate-900">AI_VISUAL_DESCRIPTION (non-authoritative):</span>
-              <span className="font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-300 text-[10px]">
-                SUPPLEMENTARY CONTEXT ONLY
+              <span className="font-bold text-slate-900">
+                {showTechnicalDetails ? 'AI_VISUAL_DESCRIPTION (non-authoritative):' : 'Automated Observations (supplementary):'}
               </span>
-              {isLiveAi && (
+              <span className="font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-300 text-[10px]">
+                {showTechnicalDetails ? 'SUPPLEMENTARY CONTEXT ONLY' : 'FOR REFERENCE ONLY'}
+              </span>
+              {showTechnicalDetails && isLiveAi && (
                 <span className="text-[10px] px-2 py-0.5 rounded bg-blue-50 text-blue-800 font-semibold border border-blue-200">
                   Live VLM Stream
                 </span>
               )}
             </div>
             <div className="text-[11px] font-mono text-slate-700">
-              Visual Confidence: <strong className="text-slate-900">{activeAnalysis.aiConfidenceScore || activeAnalysis.forensicConfidenceScore || 85}%</strong>
+              {showTechnicalDetails ? 'Visual Confidence: ' : 'Visual Clarity: '}
+              <strong className="text-slate-900">{activeAnalysis.aiConfidenceScore || activeAnalysis.forensicConfidenceScore || 85}%</strong>
             </div>
           </div>
 
           {/* Cryptographic & Forensic Hardware Signals */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 pb-1">
             <div className="p-2 rounded bg-white border border-slate-200 flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-700">Aadhaar Secure QR:</span>
+              <span className="text-[11px] font-bold text-slate-700">
+                {showTechnicalDetails ? 'Aadhaar Secure QR:' : 'Digital QR Signature:'}
+              </span>
               <span className={`text-[10px] font-black px-2 py-0.5 rounded border ${
                 result.qrDetails?.status === 'VERIFIED'
                   ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
@@ -192,11 +202,15 @@ export default function AiReviewCard({ result, onApplyAiResult }: Props) {
                   ? 'bg-rose-50 text-rose-800 border-rose-300'
                   : 'bg-slate-100 text-slate-600 border-slate-300'
               }`}>
-                {result.qrDetails?.status ? `RSA-2048: ${result.qrDetails.status}` : 'OFFLINE QR ENGINE READY'}
+                {showTechnicalDetails
+                  ? (result.qrDetails?.status ? `RSA-2048: ${result.qrDetails.status}` : 'OFFLINE QR ENGINE READY')
+                  : (result.qrDetails?.status === 'VERIFIED' ? 'Verified Genuine' : result.qrDetails?.status === 'SIGNATURE_INVALID' ? 'Signature Invalid' : result.qrDetails?.status === 'DATA_MISMATCH' ? 'Data Altered' : 'Not Present')}
               </span>
             </div>
             <div className="p-2 rounded bg-white border border-slate-200 flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-700">Pixel Forensics (Tier 1/2):</span>
+              <span className="text-[11px] font-bold text-slate-700">
+                {showTechnicalDetails ? 'Pixel Forensics (Tier 1/2):' : 'Photo Tamper Scan:'}
+              </span>
               <span className={`text-[10px] font-black px-2 py-0.5 rounded border ${
                 result.pixelForensics?.forensicVerdict === 'TAMPERED'
                   ? 'bg-rose-50 text-rose-800 border-rose-300'
@@ -204,14 +218,16 @@ export default function AiReviewCard({ result, onApplyAiResult }: Props) {
                   ? 'bg-amber-50 text-amber-800 border-amber-300'
                   : 'bg-emerald-50 text-emerald-800 border-emerald-300'
               }`}>
-                {result.pixelForensics?.forensicVerdict ? `${result.pixelForensics.forensicVerdict} (${result.pixelForensics.overallTamperScore}/100)` : 'CV COPY-MOVE + ELA READY'}
+                {showTechnicalDetails
+                  ? (result.pixelForensics?.forensicVerdict ? `${result.pixelForensics.forensicVerdict} (${result.pixelForensics.overallTamperScore}/100)` : 'CV COPY-MOVE + ELA READY')
+                  : (result.pixelForensics?.forensicVerdict === 'TAMPERED' ? 'Tampering Detected' : result.pixelForensics?.forensicVerdict === 'SUSPICIOUS' ? 'Review Recommended' : 'Clean (No Edits)')}
               </span>
             </div>
           </div>
 
           <div className="space-y-1.5">
             <div className="text-[11px] font-bold text-slate-700">
-              Visual Observation Notes:
+              {showTechnicalDetails ? 'Visual Observation Notes:' : 'What the Automated System Observed:'}
             </div>
             <ul className="space-y-1">
               {(activeAnalysis.forensicObservations || [
@@ -229,7 +245,7 @@ export default function AiReviewCard({ result, onApplyAiResult }: Props) {
 
           {activeAnalysis.reasoning && (
             <div className="pt-2 border-t border-slate-200 text-[11px] text-slate-600">
-              <strong className="text-slate-800">Visual Summary: </strong>
+              <strong className="text-slate-800">{showTechnicalDetails ? 'Visual Summary: ' : 'Summary: '}</strong>
               {activeAnalysis.reasoning}
             </div>
           )}

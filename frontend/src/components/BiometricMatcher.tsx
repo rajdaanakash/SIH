@@ -7,6 +7,7 @@ import { Camera, RefreshCw, Sparkles, CheckCircle2, XCircle, FlipHorizontal, Upl
 
 interface Props {
   result: VerificationResult;
+  showTechnicalDetails?: boolean;
   onUpdateBiometrics?: (bioUpdate: {
     faceMatched: boolean;
     similarityScore: number;
@@ -15,7 +16,7 @@ interface Props {
   }) => void;
 }
 
-export default function BiometricMatcher({ result, onUpdateBiometrics }: Props) {
+export default function BiometricMatcher({ result, showTechnicalDetails = false, onUpdateBiometrics }: Props) {
   const { biometricDetails } = result;
   const [cameraActive, setCameraActive] = useState<boolean>(false);
   const [isComparing, setIsComparing] = useState<boolean>(false);
@@ -169,13 +170,15 @@ export default function BiometricMatcher({ result, onUpdateBiometrics }: Props) 
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <div>
           <span className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-            <span>Biometric Comparison (1:1 Face Verification)</span>
+            <span>{showTechnicalDetails ? 'Biometric Comparison (1:1 Face Verification)' : 'Step 4: Face Match'}</span>
             <span className="text-[10px] px-2 py-0.5 rounded bg-blue-50 text-blue-900 font-bold border border-blue-200">
-              MHA Module 4
+              {showTechnicalDetails ? 'MHA Module 4' : 'Visual Identity'}
             </span>
           </span>
           <span className="text-[10px] text-slate-500 block">
-            Cosine Similarity • Live Anti-Spoof Liveness • Forensic Cross-Matching
+            {showTechnicalDetails
+              ? 'Cosine Similarity • Live Anti-Spoof Liveness • Forensic Cross-Matching'
+              : 'Compares live traveler photo with document portrait photo'}
           </span>
         </div>
 
@@ -299,12 +302,24 @@ export default function BiometricMatcher({ result, onUpdateBiometrics }: Props) 
           </span>
         </div>
 
-        {/* Dynamic Cosine Match Meter */}
+        {/* Dynamic Match Meter with Officer Plain Language */}
         <div className="flex flex-col items-center px-2">
-          <div className="text-xs font-extrabold font-mono text-slate-800 flex items-center gap-1">
-            <span>{biometricDetails.similarityScore}%</span>
+          <div className="text-xs font-bold text-slate-800 flex items-center gap-1 text-center max-w-[200px]">
+            {showTechnicalDetails ? (
+              <span className="font-mono">{biometricDetails.similarityScore}% Cosine Match</span>
+            ) : biometricDetails.similarityScore === 0 ? (
+              <span className="text-[11px] text-slate-500">No Face Detected</span>
+            ) : biometricDetails.faceMatched ? (
+              <span className="text-[11px] text-emerald-800 font-bold">
+                {biometricDetails.similarityScore}% match — looks like the same person
+              </span>
+            ) : (
+              <span className="text-[11px] text-rose-800 font-bold">
+                {biometricDetails.similarityScore}% match — does not match photo
+              </span>
+            )}
           </div>
-          <div className="w-16 sm:w-24 h-2 bg-slate-200 rounded-full my-1.5 overflow-hidden border border-slate-300">
+          <div className="w-20 sm:w-28 h-2 bg-slate-200 rounded-full my-1.5 overflow-hidden border border-slate-300">
             <div
               className={`h-full rounded-full transition-all duration-500 ${
                 biometricDetails.similarityScore === 0
@@ -317,19 +332,25 @@ export default function BiometricMatcher({ result, onUpdateBiometrics }: Props) 
             />
           </div>
           <span
-            className={`text-[9px] font-bold px-2 py-0.5 rounded border ${
+            className={`text-[9.5px] font-black px-2 py-0.5 rounded border uppercase tracking-wider ${
               biometricDetails.similarityScore === 0
                 ? 'bg-slate-100 text-slate-700 border-slate-300'
                 : biometricDetails.faceMatched
-                ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                : 'bg-rose-50 text-rose-800 border-rose-300'
+                ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
+                : 'bg-rose-50 text-rose-900 border-rose-300'
             }`}
           >
-            {biometricDetails.similarityScore === 0
-              ? 'NO FACE DETECTED'
-              : biometricDetails.faceMatched
-              ? 'VERIFIED MATCH'
-              : 'IMPOSTER MISMATCH'}
+            {showTechnicalDetails
+              ? (biometricDetails.similarityScore === 0
+                  ? 'NO FACE DETECTED'
+                  : biometricDetails.faceMatched
+                  ? 'VERIFIED MATCH'
+                  : 'IMPOSTER MISMATCH')
+              : (biometricDetails.similarityScore === 0
+                  ? 'Awaiting Face'
+                  : biometricDetails.faceMatched
+                  ? 'Face Matches Traveler'
+                  : 'Face Does Not Match Traveler')}
           </span>
         </div>
 
