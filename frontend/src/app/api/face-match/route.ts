@@ -166,9 +166,9 @@ Return ONLY a valid JSON object matching this schema (no markdown, no backticks 
 
       const candidateModels = Array.from(new Set([
         process.env.GEMINI_MODEL,
-        'gemini-2.5-flash',
-        'gemini-2.0-flash',
-        'gemini-1.5-flash',
+        'gemini-3.5-flash-lite',
+        'gemini-3.6-flash',
+        'gemini-3.7-flash',
       ].filter((m): m is string => Boolean(m && m.trim()))));
 
       for (const model of candidateModels) {
