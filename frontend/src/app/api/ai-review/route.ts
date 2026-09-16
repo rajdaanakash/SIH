@@ -5,63 +5,80 @@ import { z } from 'zod';
 import { verifyAadhaarQrBridge } from '@/lib/qrBridge';
 
 const FlaggedRegionSchema = z.object({
-  field: z.string().default('General Substrate'),
-  description: z.string().default('Anomaly flagged'),
-  severity: z.enum(['LOW', 'MEDIUM', 'HIGH']).default('MEDIUM'),
+  field: z.string().nullish().default('General Substrate'),
+  description: z.string().nullish().default('Anomaly flagged'),
+  severity: z.enum(['LOW', 'MEDIUM', 'HIGH']).nullish().default('MEDIUM'),
   box: z.object({
-    x: z.number().default(0),
-    y: z.number().default(0),
-    width: z.number().default(100),
-    height: z.number().default(100),
-  }).default({ x: 0, y: 0, width: 100, height: 100 }),
+    x: z.number().nullish().default(0),
+    y: z.number().nullish().default(0),
+    width: z.number().nullish().default(100),
+    height: z.number().nullish().default(100),
+  }).nullish().default({ x: 0, y: 0, width: 100, height: 100 }),
 });
 
 const AiForensicsSchema = z.object({
-  isValidIdentityDocument: z.boolean().default(true),
-  detectedDocType: z.string().default('PASSPORT'),
-  tamperDetected: z.boolean().default(false),
-  tamperSeverity: z.enum(['LOW', 'MEDIUM', 'HIGH']).default('LOW'),
-  forensicConfidenceScore: z.number().min(0).max(100).default(85),
-  anomalyDetails: z.string().default(''),
-  flaggedRegions: z.array(FlaggedRegionSchema).default([]),
-  forensicObservations: z.array(z.string()).default([]),
-  reasoning: z.string().default(''),
+  isValidIdentityDocument: z.boolean().nullish().default(true),
+  detectedDocType: z.string().nullish().default('PASSPORT'),
+  tamperDetected: z.boolean().nullish().default(false),
+  tamperSeverity: z.enum(['LOW', 'MEDIUM', 'HIGH']).nullish().default('LOW'),
+  forensicConfidenceScore: z.number().min(0).max(100).nullish().default(85),
+  anomalyDetails: z.string().nullish().default(''),
+  flaggedRegions: z.array(FlaggedRegionSchema).nullish().default([]),
+  forensicObservations: z.array(z.string()).nullish().default([]),
+  reasoning: z.string().nullish().default(''),
   extractedFields: z.object({
-    fullName: z.string().optional(),
-    documentNumber: z.string().optional(),
-    nationality: z.string().optional(),
-    dateOfBirth: z.string().optional(),
-    expiryDate: z.string().optional(),
-    gender: z.string().optional(),
-    issuingCountry: z.string().optional(),
-    mrzLine1: z.string().optional(),
-    mrzLine2: z.string().optional(),
-    mrzLine3: z.string().optional(),
-  }).optional(),
+    fullName: z.string().nullish(),
+    documentNumber: z.string().nullish(),
+    nationality: z.string().nullish(),
+    dateOfBirth: z.string().nullish(),
+    expiryDate: z.string().nullish(),
+    gender: z.string().nullish(),
+    issuingCountry: z.string().nullish(),
+    mrzLine1: z.string().nullish(),
+    mrzLine2: z.string().nullish(),
+    mrzLine3: z.string().nullish(),
+  }).nullish().default({}),
   visaDetails: z.object({
-    visaNumber: z.string().optional(),
-    passportNumberLinked: z.string().optional(),
-    visaType: z.string().optional(),
-    stayDurationDays: z.number().optional(),
-    entryValidity: z.string().optional(),
-    validFrom: z.string().optional(),
-    validUntil: z.string().optional(),
-    issuingPost: z.string().optional(),
-    passportMatched: z.boolean().optional(),
-    nameMatched: z.boolean().optional(),
-    nationalityMatched: z.boolean().optional(),
-    validityAligned: z.boolean().optional(),
-    overallCrossCheckPassed: z.boolean().optional(),
-    crossCheckNotes: z.array(z.string()).optional(),
-  }).optional(),
+    visaNumber: z.string().nullish(),
+    passportNumberLinked: z.string().nullish(),
+    visaType: z.string().nullish(),
+    stayDurationDays: z.number().nullish(),
+    entryValidity: z.string().nullish(),
+    validFrom: z.string().nullish(),
+    validUntil: z.string().nullish(),
+    issuingPost: z.string().nullish(),
+    passportMatched: z.boolean().nullish(),
+    nameMatched: z.boolean().nullish(),
+    nationalityMatched: z.boolean().nullish(),
+    validityAligned: z.boolean().nullish(),
+    overallCrossCheckPassed: z.boolean().nullish(),
+    crossCheckNotes: z.array(z.string()).nullish(),
+  }).nullish(),
 });
+
+function cleanNullFields(val: any): any {
+  if (val === null || val === undefined) return undefined;
+  if (Array.isArray(val)) return val.map(cleanNullFields).filter((v) => v !== undefined);
+  if (typeof val === 'object') {
+    const res: any = {};
+    for (const [k, v] of Object.entries(val)) {
+      const cleaned = cleanNullFields(v);
+      if (cleaned !== undefined) {
+        res[k] = cleaned;
+      }
+    }
+    return res;
+  }
+  return val;
+}
 
 function getSecretKey(name: string): string {
   return (process.env[name] || '').trim();
 }
 
-const GROQ_TIMEOUT_MS = 3000; // Increased to 3000ms (3 seconds) for robust edge roundtrip
-const GEMINI_TIMEOUT_MS = 8000; // 8000ms for secondary multimodal Gemini fallback
+const GROQ_TIMEOUT_MS = 3000; // 3000ms for edge roundtrip
+const GEMINI_TIMEOUT_MS = 6000; // 6000ms per candidate model
+
 
 async function executeWithTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
   let timer: NodeJS.Timeout;
@@ -191,7 +208,8 @@ Return ONLY a valid JSON object matching this schema:
         const completion = await executeWithTimeout(groqCall, GROQ_TIMEOUT_MS, 'Groq Vision');
         const reply = completion.choices[0]?.message?.content || '{}';
         const parsedJson = JSON.parse(reply);
-        const validated = AiForensicsSchema.parse(parsedJson);
+        const cleanedJson = cleanNullFields(parsedJson);
+        const validated = AiForensicsSchema.parse(cleanedJson);
 
         const aiVisualDescription = {
           visualDescription: validated.reasoning || 'Visual analysis completed.',
@@ -276,7 +294,8 @@ Return ONLY a valid JSON object matching this schema:
             const response = await executeWithTimeout(geminiCall, GEMINI_TIMEOUT_MS, `Gemini (${model})`);
             const responseText = response.text || '{}';
             const parsedJson = JSON.parse(responseText);
-            const validated = AiForensicsSchema.parse(parsedJson);
+            const cleanedJson = cleanNullFields(parsedJson);
+            const validated = AiForensicsSchema.parse(cleanedJson);
 
             const aiVisualDescription = {
               visualDescription: validated.reasoning || 'Visual analysis completed.',
