@@ -430,7 +430,7 @@ export default function Home() {
         {/* 2. Interactive Document Bio-Page Viewer */}
         <DocumentViewer result={currentResult} showTechnicalDetails={showTechnicalDetails} />
 
-        {/* 3. Multimodal AI Forensic Audit Card (Gemini 3.6 Flash) */}
+        {/* 3. Multimodal AI Forensic Audit Card (Gemini Multimodal Vision) */}
         <AiReviewCard
           result={currentResult}
           showTechnicalDetails={showTechnicalDetails}

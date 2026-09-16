@@ -215,7 +215,7 @@ Return ONLY a valid JSON object matching this schema:
       }
     }
 
-    // 2. SECONDARY ENGINE: Google Gemini 3.6 Flash
+    // 2. SECONDARY ENGINE: Google Gemini Flash Multimodal Vision
     if (geminiKey) {
       try {
         const ai = new GoogleGenAI({ apiKey: geminiKey });
@@ -255,39 +255,52 @@ Return ONLY a valid JSON object matching this schema:
 
         contents.push({ text: prompt });
 
-        const geminiCall = ai.models.generateContent({
-          model: 'gemini-3.6-flash',
-          contents,
-          config: {
-            responseMimeType: 'application/json',
-            temperature: 0.1,
+        const candidateModels = Array.from(new Set([
+          process.env.GEMINI_MODEL,
+          'gemini-2.5-flash',
+          'gemini-2.0-flash',
+          'gemini-1.5-flash',
+        ].filter((m): m is string => Boolean(m && m.trim()))));
+
+        for (const model of candidateModels) {
+          try {
+            const geminiCall = ai.models.generateContent({
+              model,
+              contents,
+              config: {
+                responseMimeType: 'application/json',
+                temperature: 0.1,
+              }
+            });
+
+            const response = await executeWithTimeout(geminiCall, GEMINI_TIMEOUT_MS, `Gemini (${model})`);
+            const responseText = response.text || '{}';
+            const parsedJson = JSON.parse(responseText);
+            const validated = AiForensicsSchema.parse(parsedJson);
+
+            const aiVisualDescription = {
+              visualDescription: validated.reasoning || 'Visual analysis completed.',
+              isNonAuthoritative: true as const,
+              observations: validated.forensicObservations || [],
+              flaggedRegions: validated.flaggedRegions || [],
+            };
+
+            return NextResponse.json({
+              isLiveAi: true,
+              provider: `Gemini (${model})`,
+              data: {
+                ...validated,
+                aiVisualDescription,
+                pixelForensics,
+                qrDetails,
+              },
+            });
+          } catch (modelErr: any) {
+            console.warn(`Gemini model '${model}' failed:`, modelErr.message);
           }
-        });
-
-        const response = await executeWithTimeout(geminiCall, GEMINI_TIMEOUT_MS, 'Gemini 3.6 Flash');
-        const responseText = response.text || '{}';
-        const parsedJson = JSON.parse(responseText);
-        const validated = AiForensicsSchema.parse(parsedJson);
-
-        const aiVisualDescription = {
-          visualDescription: validated.reasoning || 'Visual analysis completed.',
-          isNonAuthoritative: true as const,
-          observations: validated.forensicObservations || [],
-          flaggedRegions: validated.flaggedRegions || [],
-        };
-
-        return NextResponse.json({
-          isLiveAi: true,
-          provider: 'Gemini 3.6 Flash',
-          data: {
-            ...validated,
-            aiVisualDescription,
-            pixelForensics,
-            qrDetails,
-          },
-        });
+        }
       } catch (geminiErr: any) {
-        console.warn('Gemini 3.6 Flash inference failed:', geminiErr.message);
+        console.warn('Gemini vision engine failed:', geminiErr.message);
       }
     }
 

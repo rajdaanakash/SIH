@@ -164,22 +164,35 @@ Return ONLY a valid JSON object matching this schema (no markdown, no backticks 
 
       contents.push({ text: prompt });
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.6-flash',
-        contents: contents,
-        config: {
-          responseMimeType: 'application/json',
-          temperature: 0.1
-        }
-      });
+      const candidateModels = Array.from(new Set([
+        process.env.GEMINI_MODEL,
+        'gemini-2.5-flash',
+        'gemini-2.0-flash',
+        'gemini-1.5-flash',
+      ].filter((m): m is string => Boolean(m && m.trim()))));
 
-      const responseText = response.text || '{}';
-      const parsed = JSON.parse(responseText);
-      return NextResponse.json({
-        isLiveAi: true,
-        provider: 'Gemini 3.6 Flash',
-        data: parsed
-      });
+      for (const model of candidateModels) {
+        try {
+          const response = await ai.models.generateContent({
+            model,
+            contents: contents,
+            config: {
+              responseMimeType: 'application/json',
+              temperature: 0.1
+            }
+          });
+
+          const responseText = response.text || '{}';
+          const parsed = JSON.parse(responseText);
+          return NextResponse.json({
+            isLiveAi: true,
+            provider: `Gemini (${model})`,
+            data: parsed
+          });
+        } catch (modelErr: any) {
+          console.warn(`Gemini face-match with model '${model}' failed:`, modelErr.message);
+        }
+      }
     }
 
     return NextResponse.json({
