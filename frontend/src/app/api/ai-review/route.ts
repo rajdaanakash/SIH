@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
 import { GoogleGenAI } from '@google/genai';
 import { z } from 'zod';
+import { verifyAadhaarQrBridge } from '@/lib/qrBridge';
 
 const FlaggedRegionSchema = z.object({
   field: z.string().default('General Substrate'),
@@ -102,19 +103,14 @@ export async function POST(req: NextRequest) {
         // Python edge forensics service offline or timed out; will fall back gracefully
       }
 
-      // 2. Aadhaar Secure QR verification
+      // 2. Aadhaar Secure QR verification (queries microservice with zero-dependency CLI fallback)
       try {
-        const pyQr = await fetch('http://127.0.0.1:8000/api/qr/verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image_base64: imageBase64 }),
-          signal: AbortSignal.timeout(1500),
+        qrDetails = await verifyAadhaarQrBridge({
+          imageBase64,
+          printedFields: body.printedFields || body.currentFields,
         });
-        if (pyQr.ok) {
-          qrDetails = await pyQr.json();
-        }
-      } catch {
-        // Python QR verification service offline or timed out
+      } catch (qrErr) {
+        console.warn('Aadhaar QR verification bridge error:', qrErr);
       }
     }
 

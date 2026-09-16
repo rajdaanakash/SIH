@@ -120,18 +120,83 @@ export function getPlainStep1(result: VerificationResult): PlainStepInfo {
 }
 
 export function getPlainStep2(result: VerificationResult): PlainStepInfo {
-  const { icaoDetails, opticalNoiseDetected, icaoChecksumFailed, isTerminalBlank } = result;
+  const { icaoDetails, opticalNoiseDetected, icaoChecksumFailed, isTerminalBlank, qrDetails } = result;
 
   if (isTerminalBlank) {
     return {
       stepNumber: 2,
       title: 'Step 2: Security Code Check',
-      technicalTitle: 'Module 2: ICAO 9303 Checksum',
+      technicalTitle: 'Module 2: ICAO 9303 / UIDAI Digital Signature',
       statusBadge: 'Awaiting Scan',
       explanation: 'Security code verification will run automatically upon upload.',
       passed: false,
       statusType: 'standby',
     };
+  }
+
+  // Authoritative Aadhaar QR verification check if QR is present
+  if (qrDetails && qrDetails.qr_detected) {
+    const techTitle = `Module 2: UIDAI Digital Signature (${qrDetails.version || 'Secure QR'})`;
+
+    if (qrDetails.status === 'SIGNATURE_INVALID') {
+      return {
+        stepNumber: 2,
+        title: 'Step 2: Security Code Check',
+        technicalTitle: techTitle,
+        statusBadge: 'Failed — Signature Invalid',
+        explanation: 'Step 2: Security Code Check: Failed — The digital signature on the QR code is invalid or forged.',
+        passed: false,
+        statusType: 'failed',
+      };
+    }
+
+    if (qrDetails.status === 'DATA_MISMATCH') {
+      return {
+        stepNumber: 2,
+        title: 'Step 2: Security Code Check',
+        technicalTitle: techTitle,
+        statusBadge: 'Failed — Data Mismatch',
+        explanation: "Step 2: Security Code Check: Failed — Printed details on the card don't match the digitally signed QR data.",
+        passed: false,
+        statusType: 'failed',
+      };
+    }
+
+    if (qrDetails.status === 'QR_IMAGE_QUALITY_INSUFFICIENT') {
+      return {
+        stepNumber: 2,
+        title: 'Step 2: Security Code Check',
+        technicalTitle: techTitle,
+        statusBadge: 'Needs Review — Image Quality Low',
+        explanation: 'Step 2: Security Code Check: Needs Review — Image quality is too blurry or low-resolution to verify the digital security code.',
+        passed: false,
+        statusType: 'warning',
+      };
+    }
+
+    if (qrDetails.status === 'QR_PARSE_FAILED') {
+      return {
+        stepNumber: 2,
+        title: 'Step 2: Security Code Check',
+        technicalTitle: techTitle,
+        statusBadge: 'Needs Review — QR Unreadable',
+        explanation: 'Step 2: Security Code Check: Needs Review — Security code was detected but could not be parsed.',
+        passed: false,
+        statusType: 'warning',
+      };
+    }
+
+    if (qrDetails.status === 'VERIFIED') {
+      return {
+        stepNumber: 2,
+        title: 'Step 2: Security Code Check',
+        technicalTitle: techTitle,
+        statusBadge: 'Passed — Digital Signature Verified',
+        explanation: "Step 2: Security Code Check: Passed — Official UIDAI digital signature verified genuine and all card data matched.",
+        passed: true,
+        statusType: 'passed',
+      };
+    }
   }
 
   if (icaoChecksumFailed) {

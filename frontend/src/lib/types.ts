@@ -36,11 +36,26 @@ export type SecurityErrorCode =
   | 'ERR_QR_UNREADABLE';
 
 export interface QrVerificationDetails {
-  qrDetected: boolean;
-  qrDecoded: boolean;
-  signatureVerified: boolean;
-  dataMatched: boolean;
-  status: 'VERIFIED' | 'DATA_MISMATCH' | 'SIGNATURE_INVALID' | 'UNREADABLE' | 'NOT_PRESENT';
+  qrDetected?: boolean;
+  qrDecoded?: boolean;
+  signatureVerified?: boolean;
+  dataMatched?: boolean;
+  qr_detected?: boolean;
+  qr_decoded?: boolean;
+  signature_verified?: boolean;
+  signature_message?: string;
+  data_matched?: boolean;
+  is_secure_qr?: boolean;
+  version?: 'V2_SECURE_QR' | 'V3_SECURE_QR' | 'QDA_XML' | 'V1_XML' | string;
+  status:
+    | 'VERIFIED'
+    | 'DATA_MISMATCH'
+    | 'SIGNATURE_INVALID'
+    | 'UNREADABLE'
+    | 'NOT_PRESENT'
+    | 'QR_IMAGE_QUALITY_INSUFFICIENT'
+    | 'QR_PARSE_FAILED';
+  security_error_code?: SecurityErrorCode | null;
   algorithm?: string;
   decodedFields?: {
     name?: string;
@@ -49,8 +64,11 @@ export interface QrVerificationDetails {
     referenceId?: string;
     address?: string;
   };
+  decoded_fields?: Record<string, any>;
   mismatchDetails?: string[];
+  mismatches?: string[];
   notes?: string[];
+  message?: string;
 }
 
 export interface PixelForensicDetails {

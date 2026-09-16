@@ -91,9 +91,29 @@ export default function VerificationChecklist({ result, showTechnicalDetails = f
           <p className="text-[11px] text-slate-700 leading-snug font-medium">
             {step2.explanation}
           </p>
+          {result.qrDetails && result.qrDetails.qr_detected && (
+            <div className="mt-2 pt-1.5 border-t border-slate-200/70 flex items-center justify-between text-[10px]">
+              <span className="font-semibold text-slate-600">
+                {showTechnicalDetails ? `Digital QR Crypto (${result.qrDetails.version || 'UIDAI'}):` : 'Digital QR Signature:'}
+              </span>
+              <span className={`font-mono font-bold px-1.5 py-0.5 rounded border ${
+                result.qrDetails.status === 'VERIFIED'
+                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                  : result.qrDetails.status === 'QR_IMAGE_QUALITY_INSUFFICIENT' || result.qrDetails.status === 'QR_PARSE_FAILED'
+                  ? 'bg-amber-100 text-amber-800 border-amber-300'
+                  : 'bg-rose-100 text-rose-800 border-rose-300'
+              }`}>
+                {result.qrDetails.status === 'VERIFIED'
+                  ? 'RSA-2048 VERIFIED'
+                  : result.qrDetails.status}
+              </span>
+            </div>
+          )}
           {showTechnicalDetails && (
             <div className="mt-2 pt-1.5 border-t border-slate-200 text-[10px] text-slate-500 font-mono">
-              7-3-1 weight modulus-10 algorithm check. {result.icaoDetails.notes[0]}
+              {result.qrDetails?.qr_detected
+                ? `UIDAI Public Key • ${result.qrDetails.signature_message || 'Signature checked'} • ${result.qrDetails.data_matched ? 'Data cross-matched' : 'Data mismatch'}`
+                : `7-3-1 weight modulus-10 algorithm check. ${result.icaoDetails.notes[0]}`}
             </div>
           )}
         </div>

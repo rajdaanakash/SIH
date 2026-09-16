@@ -272,12 +272,31 @@ export default function Home() {
   const handleApplyAiResult = (aiData: any) => {
     if (!aiData) return;
     setCurrentResult((prev) => {
+      const qrDetails = aiData.qrDetails || prev.qrDetails;
+      const pixelForensics = aiData.pixelForensics || prev.pixelForensics;
+
+      // QR Cryptographic Fraud / Data Mismatch locks to DETAIN
+      const isQrFraud = qrDetails?.status === 'SIGNATURE_INVALID' || qrDetails?.status === 'DATA_MISMATCH';
+      if (isQrFraud) {
+        return {
+          ...prev,
+          aiAuditData: aiData,
+          qrDetails,
+          pixelForensics,
+          isAlreadyCompromised: true,
+          verdict: 'DETAIN',
+          riskScore: Math.max(prev.riskScore, STAGE_1_DETAIN_FLOOR),
+        };
+      }
+
       // If already compromised, AI review CANNOT upgrade or lower risk
       if (prev.isAlreadyCompromised || prev.verdict === 'DETAIN' || prev.verdict === 'SECONDARY_INSPECTION') {
         const isDetain = prev.verdict === 'DETAIN' || prev.riskScore >= STAGE_1_DETAIN_FLOOR;
         return {
           ...prev,
           aiAuditData: aiData,
+          qrDetails,
+          pixelForensics,
           isAlreadyCompromised: true,
           verdict: isDetain ? 'DETAIN' : 'SECONDARY_INSPECTION',
           riskScore: isDetain
@@ -286,8 +305,10 @@ export default function Home() {
         };
       }
 
-      // If AI review flagged secondary inspection or physical anomaly
+      // If AI review flagged secondary inspection, physical anomaly, or low-quality QR
+      const isQrReview = qrDetails?.status === 'QR_IMAGE_QUALITY_INSUFFICIENT' || qrDetails?.status === 'QR_PARSE_FAILED';
       if (
+        isQrReview ||
         aiData.recommendedAction === 'SECONDARY_INSPECTION' ||
         aiData.tamperDetected === true ||
         aiData.tamperSeverity === 'MEDIUM' ||
@@ -296,6 +317,8 @@ export default function Home() {
         return {
           ...prev,
           aiAuditData: aiData,
+          qrDetails,
+          pixelForensics,
           isAlreadyCompromised: true,
           verdict: 'SECONDARY_INSPECTION',
           riskScore: Math.max(prev.riskScore, SECONDARY_INSPECTION_FLOOR),
@@ -305,6 +328,8 @@ export default function Home() {
       return {
         ...prev,
         aiAuditData: aiData,
+        qrDetails,
+        pixelForensics,
       };
     });
   };

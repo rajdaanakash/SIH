@@ -262,7 +262,12 @@ export async function evaluateScreeningCase(params: EvaluateCaseParams): Promise
   const qrErrorCode = qrResult?.security_error_code || aiData?.qrDetails?.security_error_code || aiData?.securityErrorCode;
   const qrSigInvalid = Boolean(qrErrorCode === 'ERR_QR_SIGNATURE_INVALID' || qrResult?.signature_verified === false);
   const qrDataMismatch = Boolean(qrErrorCode === 'ERR_QR_DATA_MISMATCH' || (qrResult?.qr_detected && qrResult?.data_matched === false));
-  const qrUnreadable = Boolean(qrErrorCode === 'ERR_QR_UNREADABLE' || qrResult?.status === 'UNREADABLE');
+  const qrUnreadable = Boolean(
+    qrErrorCode === 'ERR_QR_UNREADABLE' ||
+    qrResult?.status === 'UNREADABLE' ||
+    qrResult?.status === 'QR_IMAGE_QUALITY_INSUFFICIENT' ||
+    qrResult?.status === 'QR_PARSE_FAILED'
+  );
 
   const copyMoveDetected = Boolean(pixelForensicsResult?.copy_move_detected === true || aiData?.pixelForensics?.copy_move_detected === true);
   const pixelTamperScore = pixelForensicsResult?.overall_tamper_score ?? aiData?.pixelForensics?.overall_tamper_score ?? 0;
@@ -302,7 +307,10 @@ export async function evaluateScreeningCase(params: EvaluateCaseParams): Promise
     securityViolations.push(`DATA INCONSISTENCY: ${vizMrzCheck.notes.join(' • ')}`);
   } else if (qrUnreadable) {
     securityErrorCode = 'ERR_QR_UNREADABLE';
-    securityViolations.push('QR VERIFICATION WARNING: Aadhaar QR code unreadable or corrupted. Routed to Secondary Inspection.');
+    const reason = qrResult?.status === 'QR_IMAGE_QUALITY_INSUFFICIENT'
+      ? 'QR VERIFICATION WARNING: Aadhaar QR code image quality insufficient (too blurry or low resolution). Routed to Secondary Inspection.'
+      : 'QR VERIFICATION WARNING: Aadhaar QR code unreadable or corrupted. Routed to Secondary Inspection.';
+    securityViolations.push(reason);
   } else if (opticalNoiseDetected) {
     securityErrorCode = 'SUSPICIOUS_OPTICAL_NOISE';
     securityViolations.push(`OPTICAL NOISE DETECTED: Ambiguous OCR character resolved (${icaoDetails.opticalNoiseField}). Routed to Secondary Inspection.`);

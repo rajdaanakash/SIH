@@ -122,11 +122,11 @@ class QrVerificationPayload(BaseModel):
 @app.post("/api/qr/verify")
 async def verify_qr_endpoint(
     payload: Optional[QrVerificationPayload] = None,
-    file: Optional[UploadFile] = File(None)
+    file: Optional[UploadFile] = None
 ):
     contents = b""
     printed_fields = {}
-    if file:
+    if file is not None and hasattr(file, "read"):
         contents = await file.read()
     elif payload and payload.image_base64:
         raw_b64 = payload.image_base64
@@ -144,30 +144,35 @@ async def verify_qr_endpoint(
 
     decoded = decode_aadhaar_qr(contents)
     if not decoded.get("qr_detected"):
+        status = decoded.get("status", "QR_NOT_PRESENT")
+        err_code = decoded.get("security_error_code")
         return {
             "qr_detected": False,
             "qr_decoded": False,
             "signature_verified": False,
             "data_matched": False,
-            "status": "UNREADABLE",
-            "security_error_code": "ERR_QR_UNREADABLE",
-            "message": "QR could not be detected or decoded from image.",
+            "status": status,
+            "security_error_code": err_code,
+            "message": decoded.get("message", "No QR code could be detected in image."),
         }
 
     if not decoded.get("qr_decoded"):
+        status = decoded.get("status", "QR_PARSE_FAILED")
+        err_code = decoded.get("security_error_code", "ERR_QR_UNREADABLE")
         return {
             "qr_detected": True,
             "qr_decoded": False,
             "signature_verified": False,
             "data_matched": False,
-            "status": "UNREADABLE",
-            "security_error_code": "ERR_QR_UNREADABLE",
-            "message": "QR detected but payload unreadable.",
+            "status": status,
+            "security_error_code": err_code,
+            "message": decoded.get("message", "QR detected but payload unreadable."),
         }
 
     sig_verified, sig_msg, sig_err = verify_qr_signature(
         decoded.get("data_block", b""),
-        decoded.get("signature_bytes", b"")
+        decoded.get("signature_bytes", b""),
+        version=decoded.get("version", "V2_SECURE_QR")
     )
 
     cross_check = cross_check_qr_against_ocr(decoded.get("fields", {}), printed_fields)

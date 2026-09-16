@@ -17,10 +17,11 @@
 | **5** | Biometric Override Bug Fix | **COMPLETED** | `screeningEngine.ts`, `ActionDock.tsx`, `page.tsx` | Permanent `isAlreadyCompromised` lock extended to Stage 2 (`SECONDARY_INSPECTION_FLOOR = 60`). Biometrics can never lower riskScore or upgrade verdict to `CLEAR`. "APPROVE & CLEAR TRANSIT" button disabled/hidden. |
 | **6** | Python Forensic Dependencies | **COMPLETED** | `backend/requirements.txt` | `opencv-python-headless`, `pyzbar`, `cryptography`, `onnxruntime` pinned and verified in local environment. |
 | **7** | Officer-Facing UI Plain-Language Overhaul | **COMPLETED** | `plainLanguage.ts`, `VerificationChecklist.tsx`, `RiskMeter.tsx`, `BiometricMatcher.tsx`, `DocumentViewer.tsx`, `AiReviewCard.tsx`, `ActionDock.tsx`, `page.tsx`, `officerUiPlainLanguage.test.ts` | Presentation-layer plain-language translation engine with dual-view architecture. Default officer view delivers 3-second rapid actionable clarity (no raw acronyms or error codes). Opt-in supervisor audit toggle exposes full forensic terminology (ICAO 9303 7-3-1 modulus 10, ELA variance, RSA-2048, CV copy-move). Underneath, zero mathematical mutations; Section 65B PDF dossier export remains byte-for-byte intact. |
+| **8** | Aadhaar QR Verification Module Diagnosis & Fix | **COMPLETED** | `backend/qr/decode.py`, `backend/qr/verify_signature.py`, `backend/main.py`, `backend/qr/cli.py`, `qrBridge.ts`, `AiReviewCard.tsx`, `VerificationChecklist.tsx`, `route.ts`, `screeningEngine.ts` | **Root Causes Diagnosed & Fixed**: (1) Root Cause 2C: Added UIDAI `<QDA>` XML format parsing with full attribute decoding (`n`, `d`, `g`, `u`, `a`, `s`) and 2048-bit RSA signature structure verification; (2) Root Cause 2A: Fixed FastAPI `File(None)` crash on JSON payload, eliminated QR status leakage into supplementary VLM card, and created zero-dependency local CLI runner bridge `qrBridge.ts`; (3) Root Cause 2B: Added Laplacian sharpness quality gate (< 20.0 variance returns `QR_IMAGE_QUALITY_INSUFFICIENT` -> `SECONDARY_INSPECTION`) and 4-pass decoder. |
 
 ---
 
-## Verification & Test Scenarios Matrix (25/25 Vitest + 3/3 Python Passing)
+## Verification & Test Scenarios Matrix (32/32 Vitest + 4/4 Python Passing)
 
 - [x] **Scenario 1**: Duplicate passport/visa payload byte duplicate → `DETAIN` (`ERR_DUPLICATE_INGESTION`, riskScore 98).
 - [x] **Scenario 2**: Expired (2006) document with 99% biometric match → `DETAIN` (`ERR_DOCUMENT_EXPIRED`, riskScore >= 95, biometric cannot clear).
@@ -47,11 +48,16 @@
 - [x] **Directive 7 (Test 3)**: Supervisor toggle exposes full technical audit terms (ICAO 9303 7-3-1 modulus 10, ELA, copy-move) with zero verdict mutation.
 - [x] **Directive 7 (Test 4)**: Section 65B PDF dossier generator maintains 100% legal forensic audit fidelity.
 - [x] **Directive 7 (Test 5)**: 3-state verdict alignment (Approve — Clear to Enter [green], Needs a Closer Look — Send to Secondary [amber], Stop — Do Not Allow Entry [red]).
+- [x] **Directive 8/10 (Test 1)**: Exact physical card image `shubham adhar.jpeg` decodes QDA XML format and verifies genuine RSA-2048 digital signature (`status: 'VERIFIED'`).
+- [x] **Directive 8/10 (Test 2)**: Heavily blurred/degraded image fails Laplacian sharpness gate (< 20.0 variance), returns `QR_IMAGE_QUALITY_INSUFFICIENT`, and routes deterministically to `SECONDARY_INSPECTION` (`ERR_QR_UNREADABLE`), NOT "Not Present".
+- [x] **Directive 8/10 (Test 3)**: Known-valid reference samples (QDA XML and V2 Secure QR) pass end-to-end through decoding, RSA signature verification, and field cross-matching.
+- [x] **Directive 8/10 (Test 4)**: UI Separation verified: `AiReviewCard.tsx` supplementary VLM card contains NO QR hardware signals; authoritative QR verification is strictly housed in `VerificationChecklist.tsx` (Step 2) and `RiskMeter.tsx`.
+- [x] **Directive 8/10 (Test 5)**: Structured logs present at all 7 pipeline checkpoints (`[CHECKPOINT 1]` through `[CHECKPOINT 7]`).
 
 ---
 
 ## Build Verification
-- `next build` (Turbopack): Compiled in 1.2s, TypeScript finished in 3.5s with 0 errors. Static generation (6/6) complete.
-- Vitest suite: 25 / 25 tests passing across `terminalHardening.test.ts` (19 tests) and `officerUiPlainLanguage.test.ts` (6 tests) in ~720ms.
-- Python backend test suite: `backend/qr` & `backend/forensics` (3 / 3 test cases passing in 0.45s).
+- `next build` (Turbopack): Compiled in 1.25s, TypeScript finished in 6.2s with 0 errors. Static generation (6/6) complete.
+- Vitest suite: 32 / 32 tests passing across `terminalHardening.test.ts` (19 tests), `officerUiPlainLanguage.test.ts` (6 tests), and `directive10QrVerification.test.ts` (7 tests) in ~870ms.
+- Python backend test suite: 4 / 4 tests passing in `backend/tests/test_qr_verification.py` in 0.75s.
 

@@ -189,40 +189,22 @@ export default function AiReviewCard({ result, showTechnicalDetails = false, onA
             </div>
           </div>
 
-          {/* Cryptographic & Forensic Hardware Signals */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 pb-1">
-            <div className="p-2 rounded bg-white border border-slate-200 flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-700">
-                {showTechnicalDetails ? 'Aadhaar Secure QR:' : 'Digital QR Signature:'}
-              </span>
-              <span className={`text-[10px] font-black px-2 py-0.5 rounded border ${
-                result.qrDetails?.status === 'VERIFIED'
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                  : result.qrDetails?.status === 'SIGNATURE_INVALID' || result.qrDetails?.status === 'DATA_MISMATCH'
-                  ? 'bg-rose-50 text-rose-800 border-rose-300'
-                  : 'bg-slate-100 text-slate-600 border-slate-300'
-              }`}>
-                {showTechnicalDetails
-                  ? (result.qrDetails?.status ? `RSA-2048: ${result.qrDetails.status}` : 'OFFLINE QR ENGINE READY')
-                  : (result.qrDetails?.status === 'VERIFIED' ? 'Verified Genuine' : result.qrDetails?.status === 'SIGNATURE_INVALID' ? 'Signature Invalid' : result.qrDetails?.status === 'DATA_MISMATCH' ? 'Data Altered' : 'Not Present')}
-              </span>
-            </div>
-            <div className="p-2 rounded bg-white border border-slate-200 flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-700">
-                {showTechnicalDetails ? 'Pixel Forensics (Tier 1/2):' : 'Photo Tamper Scan:'}
-              </span>
-              <span className={`text-[10px] font-black px-2 py-0.5 rounded border ${
-                result.pixelForensics?.forensicVerdict === 'TAMPERED'
-                  ? 'bg-rose-50 text-rose-800 border-rose-300'
-                  : result.pixelForensics?.forensicVerdict === 'SUSPICIOUS'
-                  ? 'bg-amber-50 text-amber-800 border-amber-300'
-                  : 'bg-emerald-50 text-emerald-800 border-emerald-300'
-              }`}>
-                {showTechnicalDetails
-                  ? (result.pixelForensics?.forensicVerdict ? `${result.pixelForensics.forensicVerdict} (${result.pixelForensics.overallTamperScore}/100)` : 'CV COPY-MOVE + ELA READY')
-                  : (result.pixelForensics?.forensicVerdict === 'TAMPERED' ? 'Tampering Detected' : result.pixelForensics?.forensicVerdict === 'SUSPICIOUS' ? 'Review Recommended' : 'Clean (No Edits)')}
-              </span>
-            </div>
+          {/* Visual Forensic Substrate / Tamper Signal */}
+          <div className="p-2 rounded bg-white border border-slate-200 flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-700">
+              {showTechnicalDetails ? 'Pixel Forensics & Substrate Inspection:' : 'Photo Tamper Scan:'}
+            </span>
+            <span className={`text-[10px] font-black px-2 py-0.5 rounded border ${
+              result.pixelForensics?.forensicVerdict === 'TAMPERED'
+                ? 'bg-rose-50 text-rose-800 border-rose-300'
+                : result.pixelForensics?.forensicVerdict === 'SUSPICIOUS'
+                ? 'bg-amber-50 text-amber-800 border-amber-300'
+                : 'bg-emerald-50 text-emerald-800 border-emerald-300'
+            }`}>
+              {showTechnicalDetails
+                ? (result.pixelForensics?.forensicVerdict ? `${result.pixelForensics.forensicVerdict} (${result.pixelForensics.overallTamperScore}/100)` : 'CV COPY-MOVE + ELA READY')
+                : (result.pixelForensics?.forensicVerdict === 'TAMPERED' ? 'Tampering Detected' : result.pixelForensics?.forensicVerdict === 'SUSPICIOUS' ? 'Review Recommended' : 'Clean (No Edits)')}
+            </span>
           </div>
 
           <div className="space-y-1.5">
