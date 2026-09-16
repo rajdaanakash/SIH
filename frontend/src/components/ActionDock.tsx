@@ -84,7 +84,7 @@ export default function ActionDock({ result, onResetTerminal }: Props) {
                 <ShieldAlert className="w-4 h-4 shrink-0" />
                 <span>DETAIN TRAVELER</span>
               </button>
-            ) : result.verdict === 'SECONDARY_INSPECTION' ? (
+            ) : result.verdict === 'SECONDARY_INSPECTION' || result.isAlreadyCompromised ? (
               <button
                 onClick={() => alert('Traveler transferred to Secondary Inspection Counter for manual physical interrogation.')}
                 className="w-full py-2.5 rounded-lg text-xs font-black bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white shadow-sm flex items-center justify-center gap-2 transition cursor-pointer"
@@ -92,7 +92,7 @@ export default function ActionDock({ result, onResetTerminal }: Props) {
                 <AlertTriangle className="w-4 h-4 shrink-0" />
                 <span>TRANSFER TO SECONDARY INSPECTION</span>
               </button>
-            ) : (
+            ) : result.verdict === 'CLEAR' && !result.isAlreadyCompromised ? (
               <button
                 onClick={handleApprove}
                 className={`w-full py-2.5 rounded-lg text-xs font-black text-white shadow-sm flex items-center justify-center gap-2 transition cursor-pointer ${
@@ -104,6 +104,10 @@ export default function ActionDock({ result, onResetTerminal }: Props) {
                 <Check className="w-4 h-4 shrink-0" />
                 <span>{cleared ? 'TRANSIT APPROVED ✓' : 'APPROVE & CLEAR TRANSIT'}</span>
               </button>
+            ) : (
+              <div className="w-full py-2.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-400 border border-slate-200 flex items-center justify-center gap-2 select-none">
+                <span>STANDBY: AWAITING PASSENGER SCAN</span>
+              </div>
             )}
           </div>
         </div>
@@ -164,7 +168,7 @@ export default function ActionDock({ result, onResetTerminal }: Props) {
                 <ShieldAlert className="w-4 h-4" />
                 <span>DETAIN TRAVELER</span>
               </button>
-            ) : result.verdict === 'SECONDARY_INSPECTION' ? (
+            ) : result.verdict === 'SECONDARY_INSPECTION' || result.isAlreadyCompromised ? (
               <button
                 onClick={() => alert('Traveler transferred to Secondary Inspection Counter for manual physical interrogation.')}
                 className="px-4 py-2 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-sm flex items-center gap-1.5 transition cursor-pointer shrink-0"
@@ -172,7 +176,7 @@ export default function ActionDock({ result, onResetTerminal }: Props) {
                 <AlertTriangle className="w-4 h-4" />
                 <span>TRANSFER TO SECONDARY</span>
               </button>
-            ) : (
+            ) : result.verdict === 'CLEAR' && !result.isAlreadyCompromised ? (
               <button
                 onClick={handleApprove}
                 className={`px-4 py-2 rounded-lg text-xs font-bold text-white shadow-sm flex items-center gap-1.5 transition cursor-pointer shrink-0 ${
@@ -182,6 +186,10 @@ export default function ActionDock({ result, onResetTerminal }: Props) {
                 <Check className="w-4 h-4" />
                 <span>{cleared ? 'APPROVED ✓' : 'APPROVE & CLEAR TRANSIT'}</span>
               </button>
+            ) : (
+              <div className="px-4 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-400 border border-slate-200 flex items-center gap-1.5 shrink-0 select-none">
+                <span>STANDBY: AWAITING PASSENGER SCAN</span>
+              </div>
             )}
           </div>
         </div>

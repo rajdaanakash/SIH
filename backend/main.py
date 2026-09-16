@@ -113,6 +113,110 @@ async def analyze_ela(file: UploadFile = File(...)):
         "interpretation": "High-frequency localized compression variance" if anomaly_score > 0.45 else "Uniform compression pattern"
     }
 
+class QrVerificationPayload(BaseModel):
+    image_base64: Optional[str] = None
+    printed_name: Optional[str] = None
+    printed_dob: Optional[str] = None
+    printed_gender: Optional[str] = None
+
+@app.post("/api/qr/verify")
+async def verify_qr_endpoint(
+    payload: Optional[QrVerificationPayload] = None,
+    file: Optional[UploadFile] = File(None)
+):
+    contents = b""
+    printed_fields = {}
+    if file:
+        contents = await file.read()
+    elif payload and payload.image_base64:
+        raw_b64 = payload.image_base64
+        if "," in raw_b64:
+            raw_b64 = raw_b64.split(",")[1]
+        import base64
+        contents = base64.b64decode(raw_b64)
+        printed_fields = {
+            "fullName": payload.printed_name,
+            "dateOfBirth": payload.printed_dob,
+            "gender": payload.printed_gender,
+        }
+
+    from backend.qr import decode_aadhaar_qr, verify_qr_signature, cross_check_qr_against_ocr
+
+    decoded = decode_aadhaar_qr(contents)
+    if not decoded.get("qr_detected"):
+        return {
+            "qr_detected": False,
+            "qr_decoded": False,
+            "signature_verified": False,
+            "data_matched": False,
+            "status": "UNREADABLE",
+            "security_error_code": "ERR_QR_UNREADABLE",
+            "message": "QR could not be detected or decoded from image.",
+        }
+
+    if not decoded.get("qr_decoded"):
+        return {
+            "qr_detected": True,
+            "qr_decoded": False,
+            "signature_verified": False,
+            "data_matched": False,
+            "status": "UNREADABLE",
+            "security_error_code": "ERR_QR_UNREADABLE",
+            "message": "QR detected but payload unreadable.",
+        }
+
+    sig_verified, sig_msg, sig_err = verify_qr_signature(
+        decoded.get("data_block", b""),
+        decoded.get("signature_bytes", b"")
+    )
+
+    cross_check = cross_check_qr_against_ocr(decoded.get("fields", {}), printed_fields)
+
+    status = "VERIFIED"
+    error_code = None
+    if not sig_verified:
+        status = "SIGNATURE_INVALID"
+        error_code = "ERR_QR_SIGNATURE_INVALID"
+    elif not cross_check.get("data_matched"):
+        status = "DATA_MISMATCH"
+        error_code = "ERR_QR_DATA_MISMATCH"
+
+    return {
+        "qr_detected": True,
+        "qr_decoded": True,
+        "is_secure_qr": decoded.get("is_secure_qr", False),
+        "version": decoded.get("version"),
+        "signature_verified": sig_verified,
+        "signature_message": sig_msg,
+        "data_matched": cross_check.get("data_matched", True),
+        "mismatches": cross_check.get("mismatches", []),
+        "status": status,
+        "security_error_code": error_code,
+        "decoded_fields": decoded.get("fields", {}),
+    }
+
+class ForensicsAnalyzePayload(BaseModel):
+    image_base64: Optional[str] = None
+
+@app.post("/api/forensics/analyze")
+async def analyze_forensics_endpoint(
+    payload: Optional[ForensicsAnalyzePayload] = None,
+    file: Optional[UploadFile] = File(None)
+):
+    contents = b""
+    if file:
+        contents = await file.read()
+    elif payload and payload.image_base64:
+        raw_b64 = payload.image_base64
+        if "," in raw_b64:
+            raw_b64 = raw_b64.split(",")[1]
+        import base64
+        contents = base64.b64decode(raw_b64)
+
+    from backend.forensics import run_pixel_forensics
+    result = run_pixel_forensics(contents)
+    return result
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -3,6 +3,9 @@ import {
   evaluateScreeningCase,
   updateBiometricsWithInvariant,
   createCleanSession,
+  STAGE_1_DETAIN_FLOOR,
+  STAGE_2_DETAIN_FLOOR,
+  SECONDARY_INSPECTION_FLOOR,
 } from '../src/lib/screeningEngine';
 import {
   calculateIcaoCheckDigit,
@@ -182,7 +185,8 @@ describe('Border Terminal Security Hardening & Zero-Trust Invariants', () => {
     // Guard: Valid check digits with sample name must NOT be hard-detained automatically
     expect(legitimateTraveler.icaoDetails.overallIcaoCompliant).toBe(true);
     expect(legitimateTraveler.verdict).toBe('SECONDARY_INSPECTION');
-    expect(legitimateTraveler.isAlreadyCompromised).toBe(false);
+    expect(legitimateTraveler.isAlreadyCompromised).toBe(true);
+    expect(legitimateTraveler.riskScore).toBeGreaterThanOrEqual(SECONDARY_INSPECTION_FLOOR);
   });
 
   // -------------------------------------------------------------
@@ -370,7 +374,8 @@ describe('Border Terminal Security Hardening & Zero-Trust Invariants', () => {
     expect(offlineOrTimeoutCase.securityErrorCode).toBe('AI_FORENSICS_UNAVAILABLE');
     expect(offlineOrTimeoutCase.verdict).toBe('SECONDARY_INSPECTION');
     expect(offlineOrTimeoutCase.verdict).not.toBe('CLEAR');
-    expect(offlineOrTimeoutCase.riskScore).toBe(48);
+    expect(offlineOrTimeoutCase.isAlreadyCompromised).toBe(true);
+    expect(offlineOrTimeoutCase.riskScore).toBeGreaterThanOrEqual(SECONDARY_INSPECTION_FLOOR);
     expect(offlineOrTimeoutCase.offlineBypassed).toBe(true);
   });
 
@@ -385,5 +390,277 @@ describe('Border Terminal Security Hardening & Zero-Trust Invariants', () => {
     expect(validateUploadPayload(oversizedFile).valid).toBe(false);
     expect(validateUploadPayload(invalidMimeFile).valid).toBe(false);
     expect(validateUploadPayload(validFile).valid).toBe(true);
+  });
+
+  // -------------------------------------------------------------
+  // Directive 5: Biometric-Override Bug Fix (Live Reproduction)
+  // -------------------------------------------------------------
+  it('Directive 5: Stage 2 SECONDARY_INSPECTION cannot be suppressed or collapsed to CLEAR/12 by Stage 3 biometric match (94%)', async () => {
+    // 1. Stage 2 returns SECONDARY_INSPECTION at 96.5% confidence
+    const stage2FlaggedCase = await evaluateScreeningCase({
+      passportPayload: 'stage2_flagged_passport_bytes',
+      extractedFields: {
+        fullName: 'SUSPECT TRAVELER',
+        documentNumber: 'Z8941209',
+        nationality: 'IND',
+        dateOfBirth: '14/08/1996',
+        expiryDate: '13/08/2034',
+        issuingCountry: 'IND',
+      },
+      aiData: {
+        recommendedAction: 'SECONDARY_INSPECTION',
+        forensicConfidenceScore: 96.5,
+        anomalyDetails: 'Substrate inconsistency detected near security threads.',
+      },
+    });
+
+    expect(stage2FlaggedCase.verdict).toBe('SECONDARY_INSPECTION');
+    expect(stage2FlaggedCase.isAlreadyCompromised).toBe(true);
+    expect(stage2FlaggedCase.riskScore).toBeGreaterThanOrEqual(SECONDARY_INSPECTION_FLOOR);
+
+    // 2. Stage 3 biometric runs anyway and returns a 94% face match
+    const afterBiometrics = updateBiometricsWithInvariant(stage2FlaggedCase, {
+      faceMatched: true,
+      similarityScore: 94.0,
+      livePhotoUrl: '/samples/face_clean_live.svg',
+    });
+
+    // Invariant: Risk score CANNOT collapse to 12/100, and verdict CANNOT upgrade to CLEAR
+    expect(afterBiometrics.verdict).toBe('SECONDARY_INSPECTION');
+    expect(afterBiometrics.verdict).not.toBe('CLEAR');
+    expect(afterBiometrics.isAlreadyCompromised).toBe(true);
+    expect(afterBiometrics.riskScore).toBeGreaterThanOrEqual(SECONDARY_INSPECTION_FLOOR);
+    expect(afterBiometrics.riskScore).not.toBe(12);
+    expect(afterBiometrics.biometricDetails.bearerStatus).toBe('BEARER_CONFIRMED');
+    expect(afterBiometrics.biometricDetails.similarityScore).toBe(94.0);
+  });
+
+  // -------------------------------------------------------------
+  // Directive 5: Clean Passage Regression
+  // -------------------------------------------------------------
+  it('Directive 5: Fully clean Stage 1 & Stage 2 traveler with 95% biometric match cleanly resolves to CLEAR', async () => {
+    // Clean Indian passport
+    const cleanCase = await evaluateScreeningCase({
+      passportPayload: 'clean_sovereign_passport_bytes',
+      extractedFields: {
+        fullName: 'AKASH VERMA',
+        documentNumber: 'Z8941209',
+        nationality: 'IND',
+        dateOfBirth: '14/08/1996',
+        expiryDate: '13/08/2034',
+        issuingCountry: 'IND',
+      },
+      aiData: {
+        recommendedAction: 'CLEAR',
+        forensicConfidenceScore: 95.0,
+        tamperDetected: false,
+      },
+    });
+
+    expect(cleanCase.verdict).toBe('CLEAR');
+    expect(cleanCase.isAlreadyCompromised).toBe(false);
+    expect(cleanCase.riskScore).toBe(12);
+
+    const approvedCase = updateBiometricsWithInvariant(cleanCase, {
+      faceMatched: true,
+      similarityScore: 95.0,
+      livePhotoUrl: '/samples/face_clean_live.svg',
+    });
+
+    expect(approvedCase.verdict).toBe('CLEAR');
+    expect(approvedCase.isAlreadyCompromised).toBe(false);
+    expect(approvedCase.riskScore).toBe(12);
+    expect(approvedCase.biometricDetails.bearerStatus).toBe('BEARER_CONFIRMED');
+  });
+
+  // -------------------------------------------------------------
+  // Directive 1 & 4 — Test 1: Aadhaar QR encodes "Akash", printed OCR displays "Aarav Sharma" -> DETAIN via ERR_QR_DATA_MISMATCH
+  // -------------------------------------------------------------
+  it('Directive 1 / Test 1: Aadhaar QR encodes "Akash", printed OCR shows "Aarav Sharma" -> DETAIN via ERR_QR_DATA_MISMATCH (riskScore 99)', async () => {
+    const result = await evaluateScreeningCase({
+      passportPayload: 'aadhaar_card_tampered_name_bytes',
+      extractedFields: {
+        fullName: 'AARAV SHARMA',
+        documentNumber: '987654321012',
+        nationality: 'IND',
+        dateOfBirth: '01/01/1990',
+        expiryDate: '01/01/2040',
+        issuingCountry: 'IND',
+      },
+      qrResult: {
+        qr_detected: true,
+        qr_decoded: true,
+        signature_verified: true,
+        data_matched: false,
+        status: 'DATA_MISMATCH',
+        security_error_code: 'ERR_QR_DATA_MISMATCH',
+        mismatches: ['Name mismatch: QR encodes "Akash", document displays "Aarav Sharma"'],
+      },
+    });
+
+    expect(result.securityErrorCode).toBe('ERR_QR_DATA_MISMATCH');
+    expect(result.verdict).toBe('DETAIN');
+    expect(result.riskScore).toBe(99);
+    expect(result.isAlreadyCompromised).toBe(true);
+    expect(result.securityAlertMessages?.some((msg: string) => msg.includes('IDENTITY FORGERY'))).toBe(true);
+  });
+
+  // -------------------------------------------------------------
+  // Directive 1 — Test 2: Tampered or invalid RSA signature -> DETAIN via ERR_QR_SIGNATURE_INVALID
+  // -------------------------------------------------------------
+  it('Directive 1 / Test 2: Aadhaar QR signature invalid against UIDAI public cert -> DETAIN via ERR_QR_SIGNATURE_INVALID (riskScore 99)', async () => {
+    const result = await evaluateScreeningCase({
+      passportPayload: 'aadhaar_fake_signature_bytes',
+      extractedFields: {
+        fullName: 'ROHIT VERMA',
+        documentNumber: '112233445566',
+        nationality: 'IND',
+        dateOfBirth: '15/07/1992',
+        expiryDate: '15/07/2040',
+        issuingCountry: 'IND',
+      },
+      qrResult: {
+        qr_detected: true,
+        qr_decoded: true,
+        signature_verified: false,
+        data_matched: true,
+        status: 'SIGNATURE_INVALID',
+        security_error_code: 'ERR_QR_SIGNATURE_INVALID',
+      },
+    });
+
+    expect(result.securityErrorCode).toBe('ERR_QR_SIGNATURE_INVALID');
+    expect(result.verdict).toBe('DETAIN');
+    expect(result.riskScore).toBe(99);
+    expect(result.isAlreadyCompromised).toBe(true);
+    expect(result.securityAlertMessages?.some((msg: string) => msg.includes('CRYPTOGRAPHIC FRAUD'))).toBe(true);
+  });
+
+  // -------------------------------------------------------------
+  // Directive 1 — Test 3: Genuine Aadhaar QR with matching fields -> Passes Stage 1 QR gate
+  // -------------------------------------------------------------
+  it('Directive 1 / Test 3: Genuine Aadhaar with authentic signature and matching fields passes Stage 1 QR gate', async () => {
+    const result = await evaluateScreeningCase({
+      passportPayload: 'aadhaar_genuine_bytes',
+      extractedFields: {
+        fullName: 'PRIYA PATEL',
+        documentNumber: '998877665544',
+        nationality: 'IND',
+        dateOfBirth: '20/03/1995',
+        expiryDate: '20/03/2045',
+        issuingCountry: 'IND',
+      },
+      qrResult: {
+        qr_detected: true,
+        qr_decoded: true,
+        signature_verified: true,
+        data_matched: true,
+        status: 'VERIFIED',
+      },
+    });
+
+    expect(result.securityErrorCode).toBeUndefined();
+    expect(result.verdict).toBe('CLEAR');
+    expect(result.riskScore).toBe(12);
+    expect(result.isAlreadyCompromised).toBe(false);
+  });
+
+  // -------------------------------------------------------------
+  // Directive 1 — Test 4: Corrupted or glare-obscured QR -> SECONDARY_INSPECTION (ERR_QR_UNREADABLE), NOT DETAIN
+  // -------------------------------------------------------------
+  it('Directive 1 / Test 4: Corrupted or obscured QR routes to SECONDARY_INSPECTION via ERR_QR_UNREADABLE, not automatic detain', async () => {
+    const result = await evaluateScreeningCase({
+      passportPayload: 'aadhaar_glare_obscured_qr_bytes',
+      extractedFields: {
+        fullName: 'PRIYA PATEL',
+        documentNumber: '998877665544',
+        nationality: 'IND',
+        dateOfBirth: '20/03/1995',
+        expiryDate: '20/03/2045',
+        issuingCountry: 'IND',
+      },
+      qrResult: {
+        qr_detected: false,
+        qr_decoded: false,
+        status: 'UNREADABLE',
+        security_error_code: 'ERR_QR_UNREADABLE',
+      },
+    });
+
+    expect(result.securityErrorCode).toBe('ERR_QR_UNREADABLE');
+    expect(result.verdict).toBe('SECONDARY_INSPECTION');
+    expect(result.verdict).not.toBe('DETAIN');
+    expect(result.riskScore).toBeGreaterThanOrEqual(SECONDARY_INSPECTION_FLOOR);
+    expect(result.isAlreadyCompromised).toBe(true);
+  });
+
+  // -------------------------------------------------------------
+  // Directive 2 & 3 — Test 5: Copy-move/tamper detected by pixel forensics -> cannot resolve to CLEAR
+  // -------------------------------------------------------------
+  it('Directive 2 & 3 / Test 5: Copy-move manipulation flagged by Tier 1 pixel forensics sets DETAIN (score 98), cannot resolve to CLEAR', async () => {
+    const result = await evaluateScreeningCase({
+      passportPayload: 'copy_moved_photo_passport_bytes',
+      extractedFields: {
+        fullName: 'AMIT SINGH',
+        documentNumber: 'Z8941209',
+        nationality: 'IND',
+        dateOfBirth: '14/08/1996',
+        expiryDate: '13/08/2034',
+        issuingCountry: 'IND',
+      },
+      pixelForensicsResult: {
+        copy_move_detected: true,
+        copy_move_regions: [{ x: 10, y: 15, width: 30, height: 40 }],
+        overall_tamper_score: 100.0,
+        forensic_verdict: 'TAMPERED',
+      },
+    });
+
+    expect(result.verdict).toBe('DETAIN');
+    expect(result.verdict).not.toBe('CLEAR');
+    expect(result.riskScore).toBe(98);
+    expect(result.isAlreadyCompromised).toBe(true);
+  });
+
+  // -------------------------------------------------------------
+  // Directive 4 — Test 6: VLM Non-Authoritative Invariant: VLM returns "CLEAR", but QR/forensics fail -> DETAIN or SECONDARY_INSPECTION
+  // -------------------------------------------------------------
+  it('Directive 4 / Test 6: VLM non-authoritative structural guarantee — VLM claiming "CLEAR" cannot override failing QR or forensic checks', async () => {
+    // Scenario: VLM was fooled by an AI-photoshopped Aadhaar that "looks normal"
+    const result = await evaluateScreeningCase({
+      passportPayload: 'photoshopped_aadhaar_with_original_qr_bytes',
+      extractedFields: {
+        fullName: 'AI GENERATED NAME',
+        documentNumber: '998877665544',
+        nationality: 'IND',
+        dateOfBirth: '20/03/1995',
+        expiryDate: '20/03/2045',
+        issuingCountry: 'IND',
+      },
+      // VLM naively says everything is clean and recommends CLEAR
+      aiData: {
+        recommendedAction: 'CLEAR',
+        tamperDetected: false,
+        forensicConfidenceScore: 98.0,
+        reasoning: 'Document typography and substrate appear completely authentic and pristine.',
+      },
+      // Authoritative offline QR check catches the discrepancy
+      qrResult: {
+        qr_detected: true,
+        qr_decoded: true,
+        signature_verified: true,
+        data_matched: false,
+        status: 'DATA_MISMATCH',
+        security_error_code: 'ERR_QR_DATA_MISMATCH',
+        mismatches: ['Name mismatch: QR encodes "ORIGINAL HOLDER", printed displays "AI GENERATED NAME"'],
+      },
+    });
+
+    // Invariant check: VLM output is strictly non-authoritative; deterministic QR check dictates DETAIN
+    expect(result.verdict).toBe('DETAIN');
+    expect(result.verdict).not.toBe('CLEAR');
+    expect(result.riskScore).toBe(99);
+    expect(result.isAlreadyCompromised).toBe(true);
+    expect(result.aiVisualDescription?.isNonAuthoritative).toBe(true);
   });
 });

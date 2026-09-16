@@ -164,40 +164,60 @@ export default function AiReviewCard({ result, onApplyAiResult }: Props) {
 
       {activeAnalysis ? (
         <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-2.5 text-xs">
-          <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-slate-900">AI Forensic Verdict:</span>
-              <span
-                className={`font-black px-2.5 py-0.5 rounded border text-[10px] ${
-                  activeAnalysis.recommendedAction === 'CLEAR'
-                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                    : activeAnalysis.recommendedAction === 'DETAIN'
-                    ? 'bg-rose-50 text-rose-800 border-rose-300'
-                    : 'bg-amber-50 text-amber-800 border-amber-300'
-                }`}
-              >
-                {activeAnalysis.recommendedAction || 'CLEAR'}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-2 gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold text-slate-900">AI_VISUAL_DESCRIPTION (non-authoritative):</span>
+              <span className="font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-300 text-[10px]">
+                SUPPLEMENTARY CONTEXT ONLY
               </span>
               {isLiveAi && (
-                <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 font-semibold border border-emerald-300">
-                  Live Vision API
+                <span className="text-[10px] px-2 py-0.5 rounded bg-blue-50 text-blue-800 font-semibold border border-blue-200">
+                  Live VLM Stream
                 </span>
               )}
             </div>
             <div className="text-[11px] font-mono text-slate-700">
-              Confidence: <strong className="text-slate-900">{activeAnalysis.aiConfidenceScore || 96.5}%</strong>
+              Visual Confidence: <strong className="text-slate-900">{activeAnalysis.aiConfidenceScore || activeAnalysis.forensicConfidenceScore || 85}%</strong>
+            </div>
+          </div>
+
+          {/* Cryptographic & Forensic Hardware Signals */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 pb-1">
+            <div className="p-2 rounded bg-white border border-slate-200 flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-700">Aadhaar Secure QR:</span>
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded border ${
+                result.qrDetails?.status === 'VERIFIED'
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                  : result.qrDetails?.status === 'SIGNATURE_INVALID' || result.qrDetails?.status === 'DATA_MISMATCH'
+                  ? 'bg-rose-50 text-rose-800 border-rose-300'
+                  : 'bg-slate-100 text-slate-600 border-slate-300'
+              }`}>
+                {result.qrDetails?.status ? `RSA-2048: ${result.qrDetails.status}` : 'OFFLINE QR ENGINE READY'}
+              </span>
+            </div>
+            <div className="p-2 rounded bg-white border border-slate-200 flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-700">Pixel Forensics (Tier 1/2):</span>
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded border ${
+                result.pixelForensics?.forensicVerdict === 'TAMPERED'
+                  ? 'bg-rose-50 text-rose-800 border-rose-300'
+                  : result.pixelForensics?.forensicVerdict === 'SUSPICIOUS'
+                  ? 'bg-amber-50 text-amber-800 border-amber-300'
+                  : 'bg-emerald-50 text-emerald-800 border-emerald-300'
+              }`}>
+                {result.pixelForensics?.forensicVerdict ? `${result.pixelForensics.forensicVerdict} (${result.pixelForensics.overallTamperScore}/100)` : 'CV COPY-MOVE + ELA READY'}
+              </span>
             </div>
           </div>
 
           <div className="space-y-1.5">
             <div className="text-[11px] font-bold text-slate-700">
-              Forensic Vision Observations:
+              Visual Observation Notes:
             </div>
             <ul className="space-y-1">
               {(activeAnalysis.forensicObservations || [
-                'Micro-print line integrity across bio-page verified.',
-                'Font kerning and numerical baseline alignment consistent.',
-                'Substrate reflection shows authentic laminate security pattern.'
+                'Substrate micro-features and document boundary alignment observed.',
+                'Visual typography baseline appears uniform on surface inspection.',
+                'Final clearance governed by deterministic cryptographic and biometric gates.'
               ]).map((obs: string, idx: number) => (
                 <li key={idx} className="flex items-start gap-1.5 text-slate-600 text-[11px]">
                   <CheckCircle2 className="w-3.5 h-3.5 text-[#0A2540] shrink-0 mt-0.5" />
@@ -209,7 +229,7 @@ export default function AiReviewCard({ result, onApplyAiResult }: Props) {
 
           {activeAnalysis.reasoning && (
             <div className="pt-2 border-t border-slate-200 text-[11px] text-slate-600">
-              <strong className="text-slate-800">Executive Summary: </strong>
+              <strong className="text-slate-800">Visual Summary: </strong>
               {activeAnalysis.reasoning}
             </div>
           )}

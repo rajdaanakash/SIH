@@ -25,6 +25,10 @@ import {
   checkVizMrzConsistency,
 } from './icao9303';
 
+export const STAGE_1_DETAIN_FLOOR = 95;
+export const STAGE_2_DETAIN_FLOOR = 95;
+export const SECONDARY_INSPECTION_FLOOR = 60;
+
 export const INITIAL_CLEAN_RESULT: VerificationResult = {
   id: 'READY',
   isTerminalBlank: true,
@@ -111,6 +115,8 @@ export interface EvaluateCaseParams {
   extractedFields?: Partial<ExtractedFields>;
   aiData?: any;
   elaScore?: number;
+  qrResult?: any;
+  pixelForensicsResult?: any;
   offlineMode?: boolean;
 }
 
@@ -126,6 +132,8 @@ export async function evaluateScreeningCase(params: EvaluateCaseParams): Promise
     visaFile,
     aiData,
     elaScore = 0.12,
+    qrResult = params.qrResult || aiData?.qrDetails,
+    pixelForensicsResult = params.pixelForensicsResult || aiData?.pixelForensics,
     offlineMode = false,
   } = params;
 
@@ -250,13 +258,30 @@ export async function evaluateScreeningCase(params: EvaluateCaseParams): Promise
   // 11. Multimodal AI Gateway Status
   const aiUnavailable = offlineMode || (aiData && aiData.status === 'AI_FORENSICS_UNAVAILABLE');
 
-  // 12. Security Error Code & Violations Priority
+  // 12. QR Verification & Pixel Forensics Evaluation (Directives 1, 2, 3)
+  const qrErrorCode = qrResult?.security_error_code || aiData?.qrDetails?.security_error_code || aiData?.securityErrorCode;
+  const qrSigInvalid = Boolean(qrErrorCode === 'ERR_QR_SIGNATURE_INVALID' || qrResult?.signature_verified === false);
+  const qrDataMismatch = Boolean(qrErrorCode === 'ERR_QR_DATA_MISMATCH' || (qrResult?.qr_detected && qrResult?.data_matched === false));
+  const qrUnreadable = Boolean(qrErrorCode === 'ERR_QR_UNREADABLE' || qrResult?.status === 'UNREADABLE');
+
+  const copyMoveDetected = Boolean(pixelForensicsResult?.copy_move_detected === true || aiData?.pixelForensics?.copy_move_detected === true);
+  const pixelTamperScore = pixelForensicsResult?.overall_tamper_score ?? aiData?.pixelForensics?.overall_tamper_score ?? 0;
+  const pixelTamperFlagged = copyMoveDetected || pixelTamperScore >= 45.0;
+
+  // 13. Security Error Code & Violations Priority
   const securityViolations: string[] = [];
   let securityErrorCode: SecurityErrorCode | undefined = undefined;
 
   if (duplicateDetected) {
     securityErrorCode = 'ERR_DUPLICATE_INGESTION';
     securityViolations.push('CRITICAL FRAUD: The identical document was submitted for both the Passport and Visa slots.');
+  } else if (qrSigInvalid) {
+    securityErrorCode = 'ERR_QR_SIGNATURE_INVALID';
+    securityViolations.push('CRITICAL CRYPTOGRAPHIC FRAUD: Aadhaar Secure QR digital signature failed verification against UIDAI offline public certificate.');
+  } else if (qrDataMismatch) {
+    securityErrorCode = 'ERR_QR_DATA_MISMATCH';
+    const mismatchDetails = qrResult?.mismatches?.join(' • ') || 'Decoded QR credential contradicts printed document fields.';
+    securityViolations.push(`CRITICAL IDENTITY FORGERY: ${mismatchDetails}`);
   } else if (isExpired) {
     securityErrorCode = 'ERR_DOCUMENT_EXPIRED';
     securityViolations.push(`CRITICAL SECURITY VIOLATION: Document is EXPIRED (${passportExpiryCheck.statusText}).`);
@@ -275,6 +300,9 @@ export async function evaluateScreeningCase(params: EvaluateCaseParams): Promise
   } else if (vizMrzMismatch) {
     securityErrorCode = 'ERR_VIZ_MRZ_MISMATCH';
     securityViolations.push(`DATA INCONSISTENCY: ${vizMrzCheck.notes.join(' • ')}`);
+  } else if (qrUnreadable) {
+    securityErrorCode = 'ERR_QR_UNREADABLE';
+    securityViolations.push('QR VERIFICATION WARNING: Aadhaar QR code unreadable or corrupted. Routed to Secondary Inspection.');
   } else if (opticalNoiseDetected) {
     securityErrorCode = 'SUSPICIOUS_OPTICAL_NOISE';
     securityViolations.push(`OPTICAL NOISE DETECTED: Ambiguous OCR character resolved (${icaoDetails.opticalNoiseField}). Routed to Secondary Inspection.`);
@@ -283,47 +311,85 @@ export async function evaluateScreeningCase(params: EvaluateCaseParams): Promise
     securityViolations.push('AI FORENSICS UNAVAILABLE: Cognitive gateway offline. Fail-closed policy mandates physical secondary inspection.');
   }
 
-  // 13. Evaluate Fatal Compromise vs Secondary vs Clear
+  // 14. Evaluate Fatal Compromise vs Secondary vs Clear
   const isFatalCompromised =
     duplicateDetected ||
+    qrSigInvalid ||
+    qrDataMismatch ||
     isExpired ||
     isVisaInPassportSlot ||
     isForeignVisaAtIndianBorder ||
     isDummySpecimen ||
     icaoChecksumFailed ||
     vizMrzMismatch ||
-    isTampered;
+    isTampered ||
+    copyMoveDetected ||
+    pixelTamperScore >= 50.0 ||
+    aiData?.recommendedAction === 'DETAIN' ||
+    aiData?.securityErrorCode === 'ERR_QR_SIGNATURE_INVALID' ||
+    aiData?.securityErrorCode === 'ERR_QR_DATA_MISMATCH';
+
+  const isSecondaryFlagged =
+    qrUnreadable ||
+    pixelTamperFlagged ||
+    opticalNoiseDetected ||
+    isNameOnlySampleMatch ||
+    aiUnavailable ||
+    (requiresVisa && !hasVisa) ||
+    aiData?.recommendedAction === 'SECONDARY_INSPECTION' ||
+    aiData?.status === 'AI_FORENSICS_UNAVAILABLE' ||
+    aiData?.tamperSeverity === 'MEDIUM' ||
+    aiData?.tamperSeverity === 'HIGH' ||
+    aiData?.securityErrorCode === 'ERR_QR_UNREADABLE' ||
+    (aiData?.forensicConfidenceScore !== undefined && aiData.forensicConfidenceScore < 70) ||
+    (elaScore > 0.40);
 
   let riskScore = 12;
   let verdict: Verdict = 'CLEAR';
+  let isAlreadyCompromised = false;
 
   if (isFatalCompromised) {
     verdict = 'DETAIN';
-    if (isDummySpecimen) riskScore = 99;
+    isAlreadyCompromised = true;
+    if (qrSigInvalid || qrDataMismatch) riskScore = 99;
+    else if (isDummySpecimen) riskScore = 99;
     else if (duplicateDetected) riskScore = 98;
     else if (icaoChecksumFailed) riskScore = 98;
+    else if (copyMoveDetected) riskScore = 98;
     else if (isExpired) riskScore = 96;
     else if (isVisaInPassportSlot) riskScore = 95;
     else if (isForeignVisaAtIndianBorder) riskScore = 94;
     else if (vizMrzMismatch) riskScore = 92;
-    else riskScore = 88;
-  } else if (opticalNoiseDetected) {
+    else riskScore = STAGE_1_DETAIN_FLOOR;
+  } else if (isSecondaryFlagged) {
     verdict = 'SECONDARY_INSPECTION';
-    riskScore = 42;
-  } else if (isNameOnlySampleMatch) {
-    verdict = 'SECONDARY_INSPECTION';
-    riskScore = 55;
-    securityViolations.push(dummyCheck.reason);
-  } else if (aiUnavailable) {
-    verdict = 'SECONDARY_INSPECTION';
-    riskScore = 48;
-  } else if (requiresVisa && !hasVisa) {
-    verdict = 'SECONDARY_INSPECTION';
-    riskScore = 48;
-    securityViolations.push(`FOREIGN PASSPORT DETECTED (${extractedFields.nationality}): Valid Indian Entry Visa / Transit Permit required.`);
+    isAlreadyCompromised = true; // Directive 5: Extend isAlreadyCompromised to Stage 2!
+    if (isNameOnlySampleMatch) {
+      riskScore = Math.max(SECONDARY_INSPECTION_FLOOR, 60);
+      securityViolations.push(dummyCheck.reason);
+    } else if (qrUnreadable) {
+      riskScore = Math.max(SECONDARY_INSPECTION_FLOOR, 60);
+    } else if (pixelTamperFlagged) {
+      riskScore = Math.max(SECONDARY_INSPECTION_FLOOR, Math.round(pixelTamperScore));
+      securityViolations.push('PIXEL FORENSIC ANOMALY: Splicing or localized compression divergence detected.');
+    } else if (aiData?.recommendedAction === 'SECONDARY_INSPECTION') {
+      riskScore = Math.max(SECONDARY_INSPECTION_FLOOR, aiData.riskScore || 65);
+      if (aiData.anomalyDetails) securityViolations.push(aiData.anomalyDetails);
+    } else if (opticalNoiseDetected) {
+      riskScore = Math.max(SECONDARY_INSPECTION_FLOOR, 60);
+    } else if (aiUnavailable) {
+      riskScore = Math.max(SECONDARY_INSPECTION_FLOOR, 60);
+    } else if (requiresVisa && !hasVisa) {
+      riskScore = Math.max(SECONDARY_INSPECTION_FLOOR, 60);
+      securityViolations.push(`FOREIGN PASSPORT DETECTED (${extractedFields.nationality}): Valid Indian Entry Visa / Transit Permit required.`);
+    } else {
+      riskScore = SECONDARY_INSPECTION_FLOOR;
+    }
   } else {
+    // Stage 1 and Stage 2 are BOTH clean
     verdict = 'CLEAR';
     riskScore = 12;
+    isAlreadyCompromised = false;
   }
 
   // Visual bounding box annotations
@@ -358,6 +424,31 @@ export async function evaluateScreeningCase(params: EvaluateCaseParams): Promise
       description: passportExpiryCheck.statusText,
       severity: 'HIGH' as const,
       box: { x: 45, y: 60, width: 50, height: 25 },
+    });
+  }
+
+  if (copyMoveDetected) {
+    flaggedRegions.push({
+      field: 'Copy-Move Clone Stamp',
+      description: 'Suspicious duplicate feature patch detected on document substrate.',
+      severity: 'HIGH' as const,
+      box: pixelForensicsResult?.copy_move_regions?.[0] || { x: 20, y: 30, width: 40, height: 30 },
+    });
+  }
+  if (qrSigInvalid) {
+    flaggedRegions.push({
+      field: 'Aadhaar QR Forgery',
+      description: 'RSA-2048 digital signature invalid against UIDAI certificate.',
+      severity: 'HIGH' as const,
+      box: { x: 70, y: 70, width: 25, height: 25 },
+    });
+  }
+  if (qrDataMismatch) {
+    flaggedRegions.push({
+      field: 'Aadhaar QR Data Mismatch',
+      description: 'Decoded QR fields contradict printed document fields.',
+      severity: 'HIGH' as const,
+      box: { x: 70, y: 70, width: 25, height: 25 },
     });
   }
 
@@ -410,7 +501,7 @@ export async function evaluateScreeningCase(params: EvaluateCaseParams): Promise
     riskScore,
     riskLevel: riskScore > 65 ? 'HIGH' : riskScore > 25 ? 'MEDIUM' : 'LOW',
     verdict,
-    isAlreadyCompromised: isFatalCompromised,
+    isAlreadyCompromised,
     executiveSummary: securityViolations.length > 0
       ? securityViolations.join(' ')
       : (aiData?.reasoning || 'Verified authentic document via Autonomous Pipeline. Cleared for transit.'),
@@ -420,6 +511,14 @@ export async function evaluateScreeningCase(params: EvaluateCaseParams): Promise
     visaImageUrl: typeof visaPayload === 'string' ? visaPayload : undefined,
     visaDetails: aiData?.visaDetails,
     aiAuditData: aiData,
+    qrDetails: qrResult || aiData?.qrDetails,
+    pixelForensics: pixelForensicsResult || aiData?.pixelForensics,
+    aiVisualDescription: {
+      visualDescription: aiData?.reasoning || 'Visual analysis complete.',
+      isNonAuthoritative: true,
+      observations: aiData?.forensicObservations || [],
+      flaggedRegions,
+    },
   };
 }
 
@@ -464,31 +563,34 @@ export function updateBiometricsWithInvariant(
     };
   }
 
-  // 2. NON-NEGOTIABLE INVARIANT: If already compromised, biometrics CANNOT clear or lower risk
-  if (currentState.isAlreadyCompromised || currentState.verdict === 'DETAIN') {
-    return {
-      ...currentState,
-      liveTravelerPhotoUrl: liveUrl,
-      biometricDetails: {
-        ...currentState.biometricDetails,
-        faceMatched: bioUpdate.faceMatched,
-        similarityScore: bioUpdate.similarityScore,
-        livenessVerified: true,
-        bearerStatus,
-      },
-      isAlreadyCompromised: true,
-      verdict: 'DETAIN',
-      riskScore: Math.max(currentState.riskScore, 95),
-      executiveSummary: `CRITICAL ALERT: TRAVELER DETAINED (${currentState.securityErrorCode || 'COMPROMISED_CREDENTIALS'}). Identity Linkage: ${bearerStatus} (${bioUpdate.similarityScore}% match). Biometric identity cannot override credential invalidation.`,
-    };
-  }
+  // 2. NON-NEGOTIABLE INVARIANT (Directive 5):
+  // If already compromised (from Stage 1 or Stage 2), biometrics can NEVER lower riskScore or upgrade verdict!
+  if (currentState.isAlreadyCompromised || currentState.verdict === 'DETAIN' || currentState.verdict === 'SECONDARY_INSPECTION') {
+    // A. If previous verdict was DETAIN: stays permanently locked to DETAIN
+    if (currentState.verdict === 'DETAIN') {
+      return {
+        ...currentState,
+        liveTravelerPhotoUrl: liveUrl,
+        biometricDetails: {
+          ...currentState.biometricDetails,
+          faceMatched: bioUpdate.faceMatched,
+          similarityScore: bioUpdate.similarityScore,
+          livenessVerified: true,
+          bearerStatus,
+        },
+        isAlreadyCompromised: true,
+        verdict: 'DETAIN',
+        riskScore: Math.max(currentState.riskScore, STAGE_1_DETAIN_FLOOR),
+        executiveSummary: `CRITICAL ALERT: TRAVELER DETAINED (${currentState.securityErrorCode || 'COMPROMISED_CREDENTIALS'}). Identity Linkage: ${bearerStatus} (${bioUpdate.similarityScore}% match). Biometric identity cannot override credential invalidation.`,
+      };
+    }
 
-  // 3. If previous verdict was SECONDARY_INSPECTION:
-  // Can ONLY stay SECONDARY_INSPECTION or escalate to DETAIN if imposter mismatch detected!
-  if (currentState.verdict === 'SECONDARY_INSPECTION') {
+    // B. If previous verdict was SECONDARY_INSPECTION (or Stage 2 flagged isAlreadyCompromised):
     const isImposter = !bioUpdate.faceMatched;
     const finalVerdict: Verdict = isImposter ? 'DETAIN' : 'SECONDARY_INSPECTION';
-    const finalRiskScore = isImposter ? Math.max(currentState.riskScore, 88) : currentState.riskScore;
+    const finalRiskScore = isImposter
+      ? Math.max(currentState.riskScore, STAGE_2_DETAIN_FLOOR, 88)
+      : Math.max(currentState.riskScore, SECONDARY_INSPECTION_FLOOR);
 
     return {
       ...currentState,
@@ -500,18 +602,18 @@ export function updateBiometricsWithInvariant(
         livenessVerified: true,
         bearerStatus,
       },
-      isAlreadyCompromised: isImposter,
+      // LOCK REMAINS PERMANENT: cannot be cleared by biometric match!
+      isAlreadyCompromised: true,
       verdict: finalVerdict,
       riskScore: finalRiskScore,
+      riskLevel: finalRiskScore > 65 ? 'HIGH' : 'MEDIUM',
       executiveSummary: isImposter
         ? `CRITICAL BIOMETRIC ALERT: Imposter mismatch detected (${bioUpdate.similarityScore}% similarity). Traveler detained.`
-        : currentState.executiveSummary,
+        : (currentState.executiveSummary || `SECONDARY INSPECTION MANDATORY: Physical credential flagged. Biometric match confirmed (${bioUpdate.similarityScore}%), manual inspection required.`),
     };
   }
 
-  // 4. If previous verdict was CLEAR:
-  // If face matched -> stays CLEAR, riskScore unchanged.
-  // If imposter -> escalates to DETAIN, riskScore clamped to 88, isAlreadyCompromised = true.
+  // 3. If previous verdict was CLEAR and uncompromised:
   if (!bioUpdate.faceMatched) {
     return {
       ...currentState,
@@ -531,7 +633,7 @@ export function updateBiometricsWithInvariant(
     };
   }
 
-  // 5. Authentic match for uncompromised traveler
+  // 4. Authentic match for fully uncompromised traveler (Both Stage 1 and Stage 2 clean)
   return {
     ...currentState,
     liveTravelerPhotoUrl: liveUrl,
@@ -543,8 +645,9 @@ export function updateBiometricsWithInvariant(
       bearerStatus: 'BEARER_CONFIRMED',
     },
     // Verdict remains CLEAR, riskScore NEVER decreased
-    verdict: currentState.verdict,
+    verdict: 'CLEAR',
     riskScore: currentState.riskScore,
+    isAlreadyCompromised: false,
     executiveSummary: 'Live passenger biometrically verified against document portrait with high confidence. Transit authorized.',
   };
 }

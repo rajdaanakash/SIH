@@ -30,7 +30,41 @@ export type SecurityErrorCode =
   | 'ERR_ICAO_CHECKSUM'
   | 'ERR_VIZ_MRZ_MISMATCH'
   | 'SUSPICIOUS_OPTICAL_NOISE'
-  | 'AI_FORENSICS_UNAVAILABLE';
+  | 'AI_FORENSICS_UNAVAILABLE'
+  | 'ERR_QR_SIGNATURE_INVALID'
+  | 'ERR_QR_DATA_MISMATCH'
+  | 'ERR_QR_UNREADABLE';
+
+export interface QrVerificationDetails {
+  qrDetected: boolean;
+  qrDecoded: boolean;
+  signatureVerified: boolean;
+  dataMatched: boolean;
+  status: 'VERIFIED' | 'DATA_MISMATCH' | 'SIGNATURE_INVALID' | 'UNREADABLE' | 'NOT_PRESENT';
+  algorithm?: string;
+  decodedFields?: {
+    name?: string;
+    dob?: string;
+    gender?: string;
+    referenceId?: string;
+    address?: string;
+  };
+  mismatchDetails?: string[];
+  notes?: string[];
+}
+
+export interface PixelForensicDetails {
+  copyMoveDetected: boolean;
+  copyMoveConfidence: number;
+  copyMoveRegions?: Array<{ x: number; y: number; width: number; height: number }>;
+  dctAnomalyScore: number;
+  benfordViolation: boolean;
+  multiLevelElaScore: number;
+  truforScore?: number;
+  overallTamperScore: number; // 0 to 100
+  forensicVerdict: 'CLEAN' | 'SUSPICIOUS' | 'TAMPERED';
+  details: string[];
+}
 
 export interface IcaoChecksumDetails {
   documentNumberValid: boolean;
@@ -132,6 +166,14 @@ export interface VerificationResult {
   offlineBypassed?: boolean;
   documentHashSha256?: string;
   visaHashSha256?: string;
+  qrDetails?: QrVerificationDetails;
+  pixelForensics?: PixelForensicDetails;
+  aiVisualDescription?: {
+    visualDescription: string;
+    isNonAuthoritative: true;
+    observations: string[];
+    flaggedRegions?: any[];
+  };
 }
 
 export interface ScenarioPreset {

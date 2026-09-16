@@ -14,7 +14,14 @@ import { ScenarioPreset, VerificationResult } from '../lib/types';
 import { computeClientEla } from '../lib/elaEngine';
 import { compressAndResizeImage } from '../lib/imageUtils';
 import { validateUploadPayload } from '../lib/dateUtils';
-import { createCleanSession, evaluateScreeningCase, updateBiometricsWithInvariant, INITIAL_CLEAN_RESULT } from '../lib/screeningEngine';
+import {
+  createCleanSession,
+  evaluateScreeningCase,
+  updateBiometricsWithInvariant,
+  INITIAL_CLEAN_RESULT,
+  STAGE_1_DETAIN_FLOOR,
+  SECONDARY_INSPECTION_FLOOR,
+} from '../lib/screeningEngine';
 import { ShieldCheck, RefreshCw, Smartphone, AlertCircle, AlertOctagon, Sparkles, RotateCcw } from 'lucide-react';
 
 const BLANK_TERMINAL_RESULT: VerificationResult = INITIAL_CLEAN_RESULT;
@@ -265,15 +272,35 @@ export default function Home() {
     if (!aiData) return;
     setCurrentResult((prev) => {
       // If already compromised, AI review CANNOT upgrade or lower risk
-      if (prev.isAlreadyCompromised || prev.verdict === 'DETAIN') {
+      if (prev.isAlreadyCompromised || prev.verdict === 'DETAIN' || prev.verdict === 'SECONDARY_INSPECTION') {
+        const isDetain = prev.verdict === 'DETAIN' || prev.riskScore >= STAGE_1_DETAIN_FLOOR;
         return {
           ...prev,
           aiAuditData: aiData,
           isAlreadyCompromised: true,
-          verdict: 'DETAIN',
-          riskScore: Math.max(prev.riskScore, 95),
+          verdict: isDetain ? 'DETAIN' : 'SECONDARY_INSPECTION',
+          riskScore: isDetain
+            ? Math.max(prev.riskScore, STAGE_1_DETAIN_FLOOR)
+            : Math.max(prev.riskScore, SECONDARY_INSPECTION_FLOOR),
         };
       }
+
+      // If AI review flagged secondary inspection or physical anomaly
+      if (
+        aiData.recommendedAction === 'SECONDARY_INSPECTION' ||
+        aiData.tamperDetected === true ||
+        aiData.tamperSeverity === 'MEDIUM' ||
+        aiData.tamperSeverity === 'HIGH'
+      ) {
+        return {
+          ...prev,
+          aiAuditData: aiData,
+          isAlreadyCompromised: true,
+          verdict: 'SECONDARY_INSPECTION',
+          riskScore: Math.max(prev.riskScore, SECONDARY_INSPECTION_FLOOR),
+        };
+      }
+
       return {
         ...prev,
         aiAuditData: aiData,
@@ -385,6 +412,8 @@ export default function Home() {
           score={currentResult.riskScore}
           level={currentResult.riskLevel}
           summary={currentResult.executiveSummary}
+          qrDetails={currentResult.qrDetails}
+          pixelForensics={currentResult.pixelForensics}
         />
       </main>
 

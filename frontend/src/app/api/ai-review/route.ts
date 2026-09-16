@@ -82,14 +82,51 @@ export async function POST(req: NextRequest) {
     const groqKey = getSecretKey('GROQ_API_KEY');
     const geminiKey = getSecretKey('GEMINI_API_KEY');
 
-    const prompt = `You are an AI Forensic Document Specialist at an Indian Border Terminal (SSB Outpost Raxaul, Year 2026).
-Your task is STRICTLY physical document forensics, optical character recognition, and cross-reconciliation.
-IMPORTANT INSTRUCTION: DO NOT JUDGE MATHEMATICAL CHECKSUMS OR TEMPORAL EXPIRY VALIDITY. Those are strictly handled by the deterministic mathematical engine.
-Your output must evaluate:
-1. Physical document authenticity: substrate integrity, photo-replacement seams, font inconsistencies, digital tampering.
-2. OCR extraction of visible text (Full Name, Document Number, Nationality, DOB, Expiry, MRZ lines).
-3. If Visa is present: Cross-reference passport number, name, and issuing authority.
-4. Output a forensicConfidenceScore (0 to 100), tamperDetected (true/false), tamperSeverity, and flagged regions.
+    // Query local Python edge backend for pixel forensics and QR verification if available
+    let pixelForensics: any = null;
+    let qrDetails: any = null;
+
+    if (imageBase64 && typeof imageBase64 === 'string') {
+      // 1. Pixel Forensics (Copy-move, DCT, multi-level ELA)
+      try {
+        const pyForensics = await fetch('http://127.0.0.1:8000/api/forensics/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image_base64: imageBase64 }),
+          signal: AbortSignal.timeout(1500),
+        });
+        if (pyForensics.ok) {
+          pixelForensics = await pyForensics.json();
+        }
+      } catch {
+        // Python edge forensics service offline or timed out; will fall back gracefully
+      }
+
+      // 2. Aadhaar Secure QR verification
+      try {
+        const pyQr = await fetch('http://127.0.0.1:8000/api/qr/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image_base64: imageBase64 }),
+          signal: AbortSignal.timeout(1500),
+        });
+        if (pyQr.ok) {
+          qrDetails = await pyQr.json();
+        }
+      } catch {
+        // Python QR verification service offline or timed out
+      }
+    }
+
+    const prompt = `You are an AI Visual Assistant providing non-authoritative descriptive context for immigration officers at an Indian Border Terminal (SSB Outpost Raxaul, Year 2026).
+Your task is STRICTLY visual observation, optical character recognition (OCR), and document substrate description.
+CRITICAL INVARIANTS:
+1. DO NOT judge legal admissibility, mathematical checksums, or final screening clearance verdicts. Those are exclusively determined by the deterministic mathematical screening engine.
+2. Your output is labeled strictly as "AI_VISUAL_DESCRIPTION (non-authoritative)".
+3. Describe physical observations: substrate texture, typography consistency, photo borders, visible text.
+4. Extract visible text (Full Name, Document Number, Nationality, DOB, Expiry, MRZ lines).
+5. If Visa is present: extract visa details for cross-reconciliation.
+6. Flag any visual anomalies or irregularities in bounding boxes.
 
 Return ONLY a valid JSON object matching this schema:
 {
@@ -160,10 +197,22 @@ Return ONLY a valid JSON object matching this schema:
         const parsedJson = JSON.parse(reply);
         const validated = AiForensicsSchema.parse(parsedJson);
 
+        const aiVisualDescription = {
+          visualDescription: validated.reasoning || 'Visual analysis completed.',
+          isNonAuthoritative: true as const,
+          observations: validated.forensicObservations || [],
+          flaggedRegions: validated.flaggedRegions || [],
+        };
+
         return NextResponse.json({
           isLiveAi: true,
           provider: 'Groq LPU (Qwen 3.8 Vision)',
-          data: validated,
+          data: {
+            ...validated,
+            aiVisualDescription,
+            pixelForensics,
+            qrDetails,
+          },
         });
       } catch (groqErr: any) {
         console.warn('Groq Vision unavailable/timed out, falling back to Gemini:', groqErr.message);
@@ -224,10 +273,22 @@ Return ONLY a valid JSON object matching this schema:
         const parsedJson = JSON.parse(responseText);
         const validated = AiForensicsSchema.parse(parsedJson);
 
+        const aiVisualDescription = {
+          visualDescription: validated.reasoning || 'Visual analysis completed.',
+          isNonAuthoritative: true as const,
+          observations: validated.forensicObservations || [],
+          flaggedRegions: validated.flaggedRegions || [],
+        };
+
         return NextResponse.json({
           isLiveAi: true,
           provider: 'Gemini 3.6 Flash',
-          data: validated,
+          data: {
+            ...validated,
+            aiVisualDescription,
+            pixelForensics,
+            qrDetails,
+          },
         });
       } catch (geminiErr: any) {
         console.warn('Gemini 3.6 Flash inference failed:', geminiErr.message);
@@ -254,7 +315,18 @@ Return ONLY a valid JSON object matching this schema:
           'Multimodal AI vision gateway unavailable/timed out.',
           'Deterministic Stage 1 & Stage 3 verification remain active.',
           'Mandatory physical inspection required under zero-trust border protocol.'
-        ]
+        ],
+        aiVisualDescription: {
+          visualDescription: 'AI visual gateway offline. Secondary inspection mandatory.',
+          isNonAuthoritative: true,
+          observations: [
+            'Multimodal AI vision gateway unavailable/timed out.',
+            'Mandatory physical inspection required under zero-trust border protocol.'
+          ],
+          flaggedRegions: [],
+        },
+        pixelForensics,
+        qrDetails,
       }
     });
 
