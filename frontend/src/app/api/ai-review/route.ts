@@ -76,8 +76,8 @@ function getSecretKey(name: string): string {
   return (process.env[name] || '').trim();
 }
 
-const GROQ_TIMEOUT_MS = 3000; // 3000ms for edge roundtrip
-const GEMINI_TIMEOUT_MS = 6000; // 6000ms per candidate model
+const GROQ_TIMEOUT_MS = Number(process.env.GROQ_TIMEOUT_MS) || 5000; // 5000ms for edge roundtrip
+const GEMINI_TIMEOUT_MS = Number(process.env.GEMINI_TIMEOUT_MS) || 15000; // Increased to 15000ms (15 seconds) per candidate model
 
 
 async function executeWithTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
