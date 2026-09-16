@@ -85,9 +85,12 @@ def run_cli():
         status = "DATA_MISMATCH"
         error_code = "ERR_QR_DATA_MISMATCH"
 
+    qr_verified = bool(sig_verified and cross.get("data_matched", True))
+
     out = {
         "qr_detected": True,
         "qr_decoded": True,
+        "qr_verified": qr_verified,
         "is_secure_qr": decoded.get("is_secure_qr", False),
         "version": decoded.get("version"),
         "signature_verified": sig_verified,
@@ -96,6 +99,8 @@ def run_cli():
         "mismatches": cross.get("mismatches", []),
         "status": status,
         "security_error_code": error_code,
+        "qr_metadata": decoded.get("qr_metadata", {}),
+        "qr_face_image_buffer": decoded.get("qr_face_image_buffer"),
         "decoded_fields": decoded.get("fields", {})
     }
     print(json.dumps(out))

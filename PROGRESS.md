@@ -19,10 +19,11 @@
 | **7** | Officer-Facing UI Plain-Language Overhaul | **COMPLETED** | `plainLanguage.ts`, `VerificationChecklist.tsx`, `RiskMeter.tsx`, `BiometricMatcher.tsx`, `DocumentViewer.tsx`, `AiReviewCard.tsx`, `ActionDock.tsx`, `page.tsx`, `officerUiPlainLanguage.test.ts` | Presentation-layer plain-language translation engine with dual-view architecture. Default officer view delivers 3-second rapid actionable clarity (no raw acronyms or error codes). Opt-in supervisor audit toggle exposes full forensic terminology (ICAO 9303 7-3-1 modulus 10, ELA variance, RSA-2048, CV copy-move). Underneath, zero mathematical mutations; Section 65B PDF dossier export remains byte-for-byte intact. |
 | **8** | Aadhaar QR Verification Module Diagnosis & Fix | **COMPLETED** | `backend/qr/decode.py`, `backend/qr/verify_signature.py`, `backend/main.py`, `backend/qr/cli.py`, `qrBridge.ts`, `AiReviewCard.tsx`, `VerificationChecklist.tsx`, `route.ts`, `screeningEngine.ts` | **Root Causes Diagnosed & Fixed**: (1) Root Cause 2C: Added UIDAI `<QDA>` XML format parsing with full attribute decoding (`n`, `d`, `g`, `u`, `a`, `s`) and 2048-bit RSA signature structure verification; (2) Root Cause 2A: Fixed FastAPI `File(None)` crash on JSON payload, eliminated QR status leakage into supplementary VLM card, and created zero-dependency local CLI runner bridge `qrBridge.ts`; (3) Root Cause 2B: Added Laplacian sharpness quality gate (< 20.0 variance returns `QR_IMAGE_QUALITY_INSUFFICIENT` -> `SECONDARY_INSPECTION`) and 4-pass decoder. |
 | **9** | Aadhaar False-Positive Remediation & Real Photo Ingestion | **COMPLETED** | `screeningEngine.ts`, `DocumentViewer.tsx`, `plainLanguage.ts`, `types.ts`, `imageUtils.ts`, `page.tsx`, `backend/qr/decode.py` | Eliminated false "FOREIGN CITIZEN — VALID INDIAN VISA REQUIRED" on real Aadhaar cards (supports `"INDIAN (INDIA)"`, 12-digit UID patterns). Fixed boolean evaluation bug where undetected QR code triggered criminal `Aadhaar QR Forgery` and `DETAIN` (score 99). Unread QR codes now route to `SECONDARY_INSPECTION` (amber). Upgraded image upload downscaling to 2048px @ 0.94 to prevent QR module blurring. |
+| **10** | Stage 1 Aadhaar Cryptographic Engine Hardening | **COMPLETED** | `backend/qr/decode.py`, `backend/qr/verify_signature.py`, `backend/qr/payload_parser.py`, `backend/qr/cli.py`, `backend/main.py`, `frontend/src/lib/types.ts`, `backend/tests/test_aadhaar_engine.py` | High-density QR extraction with `zxing-cpp` and multi-pass CV preprocessing (CLAHE, bilateral filtering). Direct raw byte stream decoding. Binary decompression (base-10 and gzip/zlib). UIDAI RSA-2048 PKCS1v15 SHA-256 signature verification against official root certificate (`uidai_public_cert.pem`). 0xFF delimiter parsing with demographic extraction and embedded JPEG photo reconstruction. Zero-trust rejection of counterfeit URLs and single-byte tampered payloads (`ERR_QR_SIGNATURE_INVALID` -> 99/DETAIN). |
 
 ---
 
-## Verification & Test Scenarios Matrix (34/34 Vitest + 4/4 Python Passing)
+## Verification & Test Scenarios Matrix (34/34 Vitest + 9/9 Python Passing)
 
 - [x] **Scenario 1**: Duplicate passport/visa payload byte duplicate → `DETAIN` (`ERR_DUPLICATE_INGESTION`, riskScore 98).
 - [x] **Scenario 2**: Expired (2006) document with 99% biometric match → `DETAIN` (`ERR_DOCUMENT_EXPIRED`, riskScore >= 95, biometric cannot clear).
@@ -56,11 +57,17 @@
 - [x] **Directive 8/10 (Test 5)**: Structured logs present at all 7 pipeline checkpoints (`[CHECKPOINT 1]` through `[CHECKPOINT 7]`).
 - [x] **Directive 9/11 (Test 5)**: Real Indian Aadhaar card with nationality `"INDIAN (INDIA)"` sets `isIndianNational: true`, `requiresVisa: false`, and `documentType: 'AADHAAR'`.
 - [x] **Directive 9/11 (Test 6)**: `QR_NOT_PRESENT` with `signature_verified: false` NEVER flags `Aadhaar QR Forgery` or `ERR_QR_SIGNATURE_INVALID` (routes safely to `SECONDARY_INSPECTION`).
+- [x] **Engine Hardening (Test 1)**: Valid RSA-2048 signed payload verified successfully with extracted metadata (`reference_id`, `name`, `dob`, `gender`, `address`, `pincode`, `photo_extracted=True`).
+- [x] **Engine Hardening (Test 2)**: Single-byte tamper in data payload immediately trips signature verification failure (`sig_verified=False`, `ERR_QR_SIGNATURE_INVALID`).
+- [x] **Engine Hardening (Test 3)**: Discrepancy between signed QR payload demographic fields and printed OCR text flags `ERR_QR_DATA_MISMATCH`.
+- [x] **Engine Hardening (Test 4)**: Counterfeit QR codes with unencrypted URLs (e.g., `https://fake-aadhaar.example.com/verify?uid=...`) or plain text fail decompression/signature gate and are rejected with `COUNTERFEIT_TAMPERED` / `ERR_QR_SIGNATURE_INVALID`.
+- [x] **Engine Hardening (Test 5)**: Physical document `shubham adhar.jpeg` decodes in <5ms via `zxingcpp.read_barcode`, validates digital signature, and extracts demographic metadata.
 
 ---
 
 ## Build Verification
-- `next build` (Turbopack): Compiled in 1.22s, TypeScript finished in 6.3s with 0 errors. Static generation (6/6) complete.
-- Vitest suite: 34 / 34 tests passing across `terminalHardening.test.ts` (19 tests), `officerUiPlainLanguage.test.ts` (6 tests), and `directive10QrVerification.test.ts` (9 tests) in ~940ms.
-- Python backend test suite: 4 / 4 tests passing in `backend/tests/test_qr_verification.py` in 0.70s.
+- `next build` (Turbopack): Compiled in 1.77s, TypeScript finished in 6.9s with 0 errors. Static generation (6/6) complete.
+- Vitest suite: 34 / 34 tests passing across `terminalHardening.test.ts` (19 tests), `officerUiPlainLanguage.test.ts` (6 tests), and `directive10QrVerification.test.ts` (9 tests) in ~884ms.
+- Python backend test suite: 9 / 9 tests passing across `test_qr_verification.py` (4 tests) and `test_aadhaar_engine.py` (5 tests) in 1.05s.
+
 

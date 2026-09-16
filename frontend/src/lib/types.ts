@@ -65,6 +65,17 @@ export interface QrVerificationDetails {
     address?: string;
   };
   decoded_fields?: Record<string, any>;
+  qr_metadata?: {
+    reference_id?: string;
+    name?: string;
+    dob?: string;
+    gender?: string;
+    address?: string;
+    pincode?: string;
+    photo_extracted?: boolean;
+    [key: string]: any;
+  };
+  qr_face_image_buffer?: string | null;
   mismatchDetails?: string[];
   mismatches?: string[];
   notes?: string[];
