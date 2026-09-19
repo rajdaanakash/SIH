@@ -305,14 +305,32 @@ export default function Home() {
         };
       }
 
+      // If tamper detected -> DETAIN (not secondary inspection)
+      const isTamper = aiData.tamperDetected === true || aiData.tamperSeverity === 'HIGH' || Boolean(pixelForensics?.copy_move_detected);
+      if (isTamper) {
+        return {
+          ...prev,
+          aiAuditData: aiData,
+          qrDetails,
+          pixelForensics,
+          tamperDetails: {
+            ...prev.tamperDetails,
+            photoReplacementDetected: prev.tamperDetails.photoReplacementDetected || Boolean(aiData.anomalyDetails?.toLowerCase().includes('photo')),
+            textManipulationDetected: prev.tamperDetails.textManipulationDetected || Boolean(aiData.anomalyDetails?.toLowerCase().includes('text')),
+            metadataTampered: true,
+          },
+          isAlreadyCompromised: true,
+          verdict: 'DETAIN',
+          riskScore: Math.max(prev.riskScore, STAGE_1_DETAIN_FLOOR, 99),
+        };
+      }
+
       // If AI review flagged secondary inspection, physical anomaly, or low-quality QR
       const isQrReview = qrDetails?.status === 'QR_IMAGE_QUALITY_INSUFFICIENT' || qrDetails?.status === 'QR_PARSE_FAILED';
       if (
         isQrReview ||
         aiData.recommendedAction === 'SECONDARY_INSPECTION' ||
-        aiData.tamperDetected === true ||
-        aiData.tamperSeverity === 'MEDIUM' ||
-        aiData.tamperSeverity === 'HIGH'
+        aiData.tamperSeverity === 'MEDIUM'
       ) {
         return {
           ...prev,

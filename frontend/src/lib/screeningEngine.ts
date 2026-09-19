@@ -259,17 +259,22 @@ export async function evaluateScreeningCase(params: EvaluateCaseParams): Promise
   const vizMrzMismatch = vizMrzCheck.hasMismatch;
 
   // 10. Digital & Physical Forensic Tampering
-  const isTampered = aiData ? aiData.tamperDetected === true : (elaScore > 0.45);
-  const isPhotoReplaced = aiData ? (
+  const isPhotoReplaced = aiData ? Boolean(
     aiData.anomalyDetails?.toLowerCase().includes('photo') ||
     aiData.reasoning?.toLowerCase().includes('photo') ||
     (elaScore > 0.55)
   ) : false;
-  const isTextForged = aiData ? (
+  const isTextForged = aiData ? Boolean(
     aiData.anomalyDetails?.toLowerCase().includes('text') ||
     aiData.reasoning?.toLowerCase().includes('font') ||
     aiData.reasoning?.toLowerCase().includes('expiry')
   ) : false;
+  const isTampered = Boolean(
+    (aiData && (aiData.tamperDetected === true || aiData.tamperSeverity === 'HIGH')) ||
+    isPhotoReplaced ||
+    isTextForged ||
+    (elaScore > 0.45)
+  );
 
   // 11. Multimodal AI Gateway Status
   const aiUnavailable = offlineMode || (aiData && aiData.status === 'AI_FORENSICS_UNAVAILABLE');
@@ -374,7 +379,6 @@ export async function evaluateScreeningCase(params: EvaluateCaseParams): Promise
     aiData?.recommendedAction === 'SECONDARY_INSPECTION' ||
     aiData?.status === 'AI_FORENSICS_UNAVAILABLE' ||
     aiData?.tamperSeverity === 'MEDIUM' ||
-    aiData?.tamperSeverity === 'HIGH' ||
     aiData?.securityErrorCode === 'ERR_QR_UNREADABLE' ||
     (aiData?.forensicConfidenceScore !== undefined && aiData.forensicConfidenceScore < 70) ||
     (elaScore > 0.40);
@@ -387,7 +391,7 @@ export async function evaluateScreeningCase(params: EvaluateCaseParams): Promise
     verdict = 'DETAIN';
     isAlreadyCompromised = true;
     if (qrSigInvalid || qrDataMismatch) riskScore = 99;
-    else if (isDummySpecimen) riskScore = 99;
+    else if (isDummySpecimen || isTampered) riskScore = 99;
     else if (duplicateDetected) riskScore = 98;
     else if (icaoChecksumFailed) riskScore = 98;
     else if (copyMoveDetected) riskScore = 98;

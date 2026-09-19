@@ -77,7 +77,7 @@ export default function ActionDock({ result, showTechnicalDetails = false, onRes
               <div className="w-full py-2.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-400 border border-slate-200 flex items-center justify-center gap-2 select-none">
                 <span>STANDBY: AWAITING PASSENGER SCAN</span>
               </div>
-            ) : result.verdict === 'DETAIN' ? (
+            ) : result.verdict === 'DETAIN' || Boolean(result.tamperDetails?.photoReplacementDetected) || Boolean(result.tamperDetails?.textManipulationDetected) || Boolean(result.pixelForensics?.copyMoveDetected) || Boolean(result.aiAuditData && (result.aiAuditData.tamperDetected === true || result.aiAuditData.tamperSeverity === 'HIGH')) ? (
               <button
                 onClick={handleDetain}
                 className="w-full py-2.5 rounded-lg text-xs font-black bg-rose-700 hover:bg-rose-800 active:bg-rose-900 text-white shadow-sm flex items-center justify-center gap-2 transition animate-pulse cursor-pointer"
@@ -162,7 +162,7 @@ export default function ActionDock({ result, showTechnicalDetails = false, onRes
               <div className="px-4 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-400 border border-slate-200 flex items-center gap-1.5 shrink-0 select-none">
                 <span>STANDBY: AWAITING PASSENGER SCAN</span>
               </div>
-            ) : result.verdict === 'DETAIN' ? (
+            ) : result.verdict === 'DETAIN' || Boolean(result.tamperDetails?.photoReplacementDetected) || Boolean(result.tamperDetails?.textManipulationDetected) || Boolean(result.pixelForensics?.copyMoveDetected) || Boolean(result.aiAuditData && (result.aiAuditData.tamperDetected === true || result.aiAuditData.tamperSeverity === 'HIGH')) ? (
               <button
                 onClick={handleDetain}
                 className="px-4 py-2 rounded-lg text-xs font-black bg-rose-700 hover:bg-rose-800 text-white shadow-sm flex items-center gap-1.5 transition animate-pulse cursor-pointer shrink-0"

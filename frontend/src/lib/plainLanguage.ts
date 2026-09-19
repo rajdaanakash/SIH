@@ -31,7 +31,13 @@ export function getPlainVerdict(result: VerificationResult): PlainVerdictInfo {
     };
   }
 
-  if (verdict === 'DETAIN' || (isAlreadyCompromised && result.riskScore >= 95)) {
+  const isTamperDetected =
+    Boolean(result.tamperDetails?.photoReplacementDetected) ||
+    Boolean(result.tamperDetails?.textManipulationDetected) ||
+    Boolean(result.pixelForensics?.copyMoveDetected) ||
+    Boolean(result.aiAuditData && (result.aiAuditData.tamperDetected === true || result.aiAuditData.tamperSeverity === 'HIGH'));
+
+  if (verdict === 'DETAIN' || isTamperDetected || (isAlreadyCompromised && result.riskScore >= 95)) {
     return {
       label: 'Stop — Do Not Allow Entry',
       actionText: 'Stop — Do Not Allow Entry',
@@ -262,9 +268,14 @@ export function getPlainStep3(result: VerificationResult): PlainStepInfo {
     };
   }
 
-  const isCopyMove = pixelForensics?.copyMoveDetected || tamperDetails.photoReplacementDetected;
+  const isCopyMove = Boolean(pixelForensics?.copyMoveDetected || tamperDetails.photoReplacementDetected);
   const isQrTampered = qrDetails?.status === 'SIGNATURE_INVALID' || qrDetails?.status === 'DATA_MISMATCH';
-  const isTampered = isCopyMove || isQrTampered || tamperDetails.textManipulationDetected || tamperDetails.elaAnomalyScore > 0.50;
+  const isTampered =
+    isCopyMove ||
+    isQrTampered ||
+    tamperDetails.textManipulationDetected ||
+    tamperDetails.elaAnomalyScore > 0.50 ||
+    Boolean(result.aiAuditData && (result.aiAuditData.tamperDetected === true || result.aiAuditData.tamperSeverity === 'HIGH'));
 
   if (isTampered) {
     let reason = 'Photo or text shows signs of being edited, pasted, or altered.';
